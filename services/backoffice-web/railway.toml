@@ -1,0 +1,5 @@
+# Railway → Settings → «Railway config file»: /services/backoffice-web/railway.toml
+[build]
+watchPatterns = [
+  "services/backoffice-web/**",
+]

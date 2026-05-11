@@ -1,0 +1,7 @@
+# Railway → Settings → «Railway config file»: /services/agent/railway.toml
+# Build desde la raíz del repo (Dockerfile copia services/common).
+[build]
+watchPatterns = [
+  "services/agent/**",
+  "services/common/**",
+]

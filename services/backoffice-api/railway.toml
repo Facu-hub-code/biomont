@@ -1,0 +1,8 @@
+# Config as code para Railway. En el servicio: Settings → configurar
+# «Railway config file» a /services/backoffice-api/railway.toml
+# El contexto de build debe ser la raíz del repo (Dockerfile copia services/common).
+[build]
+watchPatterns = [
+  "services/backoffice-api/**",
+  "services/common/**",
+]
