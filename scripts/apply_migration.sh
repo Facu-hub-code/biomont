@@ -40,6 +40,13 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
     exit 2
 fi
 
+# `railway run` ejecuta en tu equipo: el host *.railway.internal no resuelve fuera
+# de la red de Railway. Si existe URL publica del plugin Postgres, usarla.
+if [[ "${DATABASE_URL}" == *".railway.internal"* ]] && [[ -n "${DATABASE_PUBLIC_URL:-}" ]]; then
+    log "Usando DATABASE_PUBLIC_URL (conexion local / fuera de la VPC Railway)."
+    DATABASE_URL="${DATABASE_PUBLIC_URL}"
+fi
+
 case "${DIRECTION}" in
     up|--up)
         pattern="${VERSION}_*.sql"

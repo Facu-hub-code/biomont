@@ -37,6 +37,12 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
     exit 2
 fi
 
+# `railway run` en local: *.railway.internal no resuelve fuera de la VPC.
+if [[ "${DATABASE_URL}" == *".railway.internal"* ]] && [[ -n "${DATABASE_PUBLIC_URL:-}" ]]; then
+    log "Usando DATABASE_PUBLIC_URL (conexion local / fuera de la VPC Railway)."
+    DATABASE_URL="${DATABASE_PUBLIC_URL}"
+fi
+
 if ! command -v psql >/dev/null 2>&1; then
     log "ERROR: psql no esta instalado en el PATH."
     exit 3
