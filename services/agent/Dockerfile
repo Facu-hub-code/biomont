@@ -27,4 +27,5 @@ WORKDIR /app/services/agent
 
 EXPOSE 8001
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Railway injecta PORT; compose local sigue usando 8001 si no viene seteado.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8001}"]
