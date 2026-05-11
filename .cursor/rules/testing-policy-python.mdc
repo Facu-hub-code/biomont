@@ -1,0 +1,14 @@
+---
+description: Politica de testing para FastAPI, Supabase y orquestacion de agentes
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Testing policy
+
+- `MUST`: todo cambio funcional incluye o actualiza tests.
+- `MUST`: cambios en endpoints incluyen tests HTTP (caso exitoso y error principal).
+- `MUST`: en CI, no depender de servicios externos reales; usar mocks/fakes para LLM/APIs.
+- `SHOULD`: tests deterministas con fixtures explicitas y datos minimos de dominio.
+- `SHOULD`: para flujos de agente, cubrir al menos seleccion de herramienta y respuesta final.
+- Ejecutar tests con entorno virtual activo: `source venv/bin/activate && python -m pytest -q`.

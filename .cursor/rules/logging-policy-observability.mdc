@@ -1,0 +1,13 @@
+---
+description: Politica de logging estructurado y observabilidad
+globs: app/**/*.py
+alwaysApply: false
+---
+
+# Logging policy
+
+- `MUST`: no loguear secretos ni PII (tokens, credenciales, payloads sensibles).
+- `MUST`: usar logs estructurados con contexto minimo (`component`, `event`, y `request_id` cuando exista).
+- `MUST`: usar `logger.exception(...)` al capturar errores inesperados para conservar stack trace.
+- `SHOULD`: registrar operaciones de I/O externo con resultado y latencia cuando sea relevante.
+- `SHOULD`: mantener mensajes concretos y accionables; evitar texto ambiguo.

@@ -1,0 +1,13 @@
+---
+description: Reglas de arquitectura limpia para backend FastAPI multi-tenant
+globs: app/**/*.py
+alwaysApply: false
+---
+
+# Arquitectura limpia (FastAPI + agentes)
+
+- `MUST`: separar responsabilidades por capa: `api` (HTTP), `agent` (casos de uso), `db|integrations` (infra), `schemas` (contratos).
+- `MUST`: los routers solo validan/autorizan y delegan; la logica de negocio vive fuera de `app/api`.
+- `MUST`: mantener dependencias en una sola direccion (capas externas dependen de internas, no al reves).
+- `SHOULD`: encapsular integraciones externas (Supabase, LLM, WhatsApp, Grafana/Loki) en clientes/adaptadores.
+- `SHOULD`: separar runtime/estado del agente de las herramientas para mejorar testabilidad.

@@ -1,0 +1,14 @@
+---
+description: Convenciones de nombres para Python, FastAPI y dominio
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Naming conventions
+
+- `MUST`: `snake_case` para funciones, metodos, variables y modulos.
+- `MUST`: `PascalCase` para clases, `Enum` y modelos Pydantic.
+- `MUST`: `UPPER_SNAKE_CASE` para constantes y variables de entorno.
+- `SHOULD`: usar sufijos semanticos por rol (`*_client`, `*_builder`, `*_loader`, `*_resolver`, `*_store`) cuando aporten claridad.
+- `SHOULD`: evitar abreviaturas ambiguas (`cfg`, `obj`, `tmp`) salvo en bloques muy cortos.
+- `SHOULD`: en tests, usar nombres descriptivos del comportamiento (`test_<unidad>_<escenario>_<resultado>`).

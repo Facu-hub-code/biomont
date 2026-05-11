@@ -1,0 +1,12 @@
+---
+description: Restricciones de dependencias para preservar arquitectura limpia
+alwaysApply: true
+---
+
+# Dependency constraints
+
+- `MUST`: no agregar dependencias para utilidades triviales que puedan resolverse con stdlib o codigo local simple.
+- `MUST`: justificar cada dependencia nueva en el PR (problema que resuelve y costo principal).
+- `MUST`: evitar acoplamiento de capas (`api` no accede directo a `db` sin pasar por servicio/adaptador).
+- `SHOULD`: inicializar clientes/SDKs via factories o dependency injection, no como globales de importacion si tienen I/O.
+- `SHOULD`: encapsular acceso a PostgreSQL/Supabase para evitar SQL disperso en handlers o herramientas.

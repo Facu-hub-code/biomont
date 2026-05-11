@@ -1,0 +1,78 @@
+name: biomont
+
+# =====================================================================
+# Compose v1 - 3 servicios. La base Postgres+pgvector NO esta aca: vive
+# en Railway y se accede via DATABASE_URL.
+# =====================================================================
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: services/agent/Dockerfile
+    image: biomont/agent:dev
+    container_name: biomont-agent
+    env_file:
+      - .env
+    environment:
+      - SERVICE_NAME=agent
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request,sys;
+          r=urllib.request.urlopen('http://localhost:8001/health');
+          sys.exit(0 if r.status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  backoffice-api:
+    build:
+      context: .
+      dockerfile: services/backoffice-api/Dockerfile
+    image: biomont/backoffice-api:dev
+    container_name: biomont-backoffice-api
+    env_file:
+      - .env
+    environment:
+      - SERVICE_NAME=backoffice-api
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request,sys;
+          r=urllib.request.urlopen('http://localhost:8002/health');
+          sys.exit(0 if r.status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  backoffice-web:
+    build:
+      context: services/backoffice-web
+      dockerfile: Dockerfile
+    image: biomont/backoffice-web:dev
+    container_name: biomont-backoffice-web
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      backoffice-api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: biomont-network
