@@ -5,6 +5,9 @@ import type { ReactNode } from "react";
 import { clearSessionCookie } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 
+/** Rutas autenticadas deben leer la cookie de sesión en cada request (evita RSC estático sin token). */
+export const dynamic = "force-dynamic";
+
 async function logoutAction() {
   "use server";
   await clearSessionCookie();

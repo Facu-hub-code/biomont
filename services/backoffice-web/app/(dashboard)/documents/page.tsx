@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getApiBaseUrl } from "@/lib/api";
 
 type Document = {
   id: string;
@@ -16,7 +16,7 @@ type Document = {
 async function uploadDocumentAction(formData: FormData) {
   "use server";
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8002";
+  const apiBase = getApiBaseUrl();
   const { cookies } = await import("next/headers");
   const store = await cookies();
   const token = store.get("biomont_session")?.value;

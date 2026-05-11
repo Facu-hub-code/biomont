@@ -66,6 +66,10 @@ services:
       - .env
     environment:
       - NODE_ENV=production
+      # SSR y server actions deben usar el nombre de servicio en la red Docker, no localhost.
+      - API_INTERNAL_BASE_URL=http://backoffice-api:8002
+      # Cookie de sesión sobre http://localhost:3000 (sin TLS en Compose).
+      - SESSION_COOKIE_SECURE=false
     depends_on:
       backoffice-api:
         condition: service_healthy

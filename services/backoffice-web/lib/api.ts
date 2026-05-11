@@ -7,8 +7,14 @@ export type ApiInit = RequestInit & {
   json?: unknown;
 };
 
-function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8002";
+/** Base URL for API calls. Browser uses NEXT_PUBLIC_*; SSR/server actions use API_INTERNAL_BASE_URL when set (Docker service hostname). */
+export function getApiBaseUrl(): string {
+  const publicBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8002";
+  if (typeof window === "undefined") {
+    const internal = process.env.API_INTERNAL_BASE_URL?.trim();
+    return internal || publicBase;
+  }
+  return publicBase;
 }
 
 export async function getAccessToken(): Promise<string | null> {
@@ -18,6 +24,12 @@ export async function getAccessToken(): Promise<string | null> {
 
 export async function setSessionCookie(token: string, maxAgeSeconds: number): Promise<void> {
   const store = await cookies();
+  const secure =
+    process.env.SESSION_COOKIE_SECURE === "true"
+      ? true
+      : process.env.SESSION_COOKIE_SECURE === "false"
+        ? false
+        : process.env.NODE_ENV === "production";
   store.set({
     name: SESSION_COOKIE,
     value: token,
@@ -25,7 +37,7 @@ export async function setSessionCookie(token: string, maxAgeSeconds: number): Pr
     sameSite: "lax",
     path: "/",
     maxAge: maxAgeSeconds,
-    secure: process.env.NODE_ENV === "production",
+    secure,
   });
 }
 
