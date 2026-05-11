@@ -25,6 +25,9 @@ from app.integrations.docling_converter import PdfToMarkdownConverter
 
 _logger = get_logger("etl.pipeline")
 
+# Evita cargar clasificación/error gigante que rompe payloads JSON del listado.
+_FAIL_REASON_MAX_LEN = 8_192
+
 
 @dataclass(slots=True)
 class IngestResult:
@@ -130,7 +133,10 @@ class DocumentIngestService:
                 markdown_chars=len(markdown),
             )
         except Exception as exc:
-            await self._documents.mark_failed(document_id, str(exc))
+            reason = str(exc)
+            if len(reason) > _FAIL_REASON_MAX_LEN:
+                reason = reason[: _FAIL_REASON_MAX_LEN] + "…(truncado)"
+            await self._documents.mark_failed(document_id, reason)
             _logger.exception(
                 "etl_ingest_failed",
                 action="ingest_failed",

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+import time
 from dataclasses import asdict
 from typing import Annotated
 from uuid import UUID
@@ -31,7 +34,7 @@ from app.api.dependencies import (
 )
 from app.db.audit_repository import AuditRepository
 from app.db.document_repository import DocumentRepository
-from app.integrations.docling_converter import DoclingPdfConverter
+from app.integrations.docling_converter import get_docling_pdf_converter
 from app.schemas.auth import CurrentUser
 from app.schemas.documents import (
     DocumentDetail,
@@ -41,6 +44,31 @@ from app.schemas.documents import (
 from app.services.etl_pipeline import DocumentIngestService
 
 _logger = get_logger("api.documents")
+
+_DEBUG_LOG_PATH = os.environ.get(
+    "CURSOR_DEBUG_LOG_PATH",
+    "/Users/facundolorenzo/Documents/SuplaiSales/source/biomont/.cursor/debug-33ab56.log",
+)
+
+
+def _agent_dbg(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    # #region agent log
+    try:
+        payload = {
+            "sessionId": "33ab56",
+            "runId": "pre-fix",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+    # #endregion
+
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -59,6 +87,14 @@ async def list_documents(
     documents: Annotated[DocumentRepository, Depends(get_documents)],
 ) -> list[DocumentSummary]:
     rows = await documents.list_documents()
+    # #region agent log
+    _agent_dbg(
+        "H1",
+        "documents_router.list_documents",
+        "rows fetched",
+        {"count": len(rows)},
+    )
+    # #endregion
     return [_summary(row) for row in rows]
 
 
@@ -106,7 +142,20 @@ async def upload_document(
             detail="empty file",
         )
 
-    converter = DoclingPdfConverter()
+    # #region agent log
+    _agent_dbg(
+        "H2",
+        "documents_router.upload_document",
+        "starting ingest",
+        {
+            "content_type": file.content_type,
+            "pdf_bytes": len(pdf_bytes),
+            "title_len": len(title),
+        },
+    )
+    # #endregion
+
+    converter = get_docling_pdf_converter()
     embeddings = build_embeddings()
     pipeline = DocumentIngestService(
         pool=pool,
@@ -116,32 +165,55 @@ async def upload_document(
         embeddings=embeddings,
     )
 
-    result = await pipeline.ingest_pdf(
-        pdf_bytes=pdf_bytes,
-        original_filename=file.filename,
-        title=title,
-        product_name=product_name,
-        country_iso=country_iso,
-        language=language,
-        uploaded_by=current.id,
-    )
+    try:
+        result = await pipeline.ingest_pdf(
+            pdf_bytes=pdf_bytes,
+            original_filename=file.filename,
+            title=title,
+            product_name=product_name,
+            country_iso=country_iso,
+            language=language,
+            uploaded_by=current.id,
+        )
 
-    document = await documents.get_document(result.document_id)
-    if document is None:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        document = await documents.get_document(result.document_id)
+        if document is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    await audit.record(
-        actor_id=current.id,
-        entity="documents",
-        entity_id=document.id,
-        action="upload",
-        after={
-            "title": document.title,
-            "country_iso": document.country_iso,
-            "chunks": result.chunks_persisted,
-        },
-    )
-    return _detail(document)
+        await audit.record(
+            actor_id=current.id,
+            entity="documents",
+            entity_id=document.id,
+            action="upload",
+            after={
+                "title": document.title,
+                "country_iso": document.country_iso,
+                "chunks": result.chunks_persisted,
+            },
+        )
+        # #region agent log
+        _agent_dbg(
+            "H2",
+            "documents_router.upload_document",
+            "ingest finished ok",
+            {
+                "document_id": str(document.id),
+                "status": document.status,
+                "chunks": result.chunks_persisted,
+            },
+        )
+        # #endregion
+        return _detail(document)
+    except Exception as exc:
+        # #region agent log
+        _agent_dbg(
+            "H2",
+            "documents_router.upload_document",
+            "ingest raised",
+            {"exc_type": type(exc).__name__, "exc_msg": str(exc)[:400]},
+        )
+        # #endregion
+        raise
 
 
 @router.patch("/{document_id}", response_model=DocumentDetail)

@@ -37,10 +37,14 @@ services:
       dockerfile: services/backoffice-api/Dockerfile
     image: biomont/backoffice-api:dev
     container_name: biomont-backoffice-api
+    volumes:
+      - ./.cursor:/cursor/agent-debug:rw
     env_file:
       - .env
     environment:
       - SERVICE_NAME=backoffice-api
+      # Debug NDJSON desde el código instrumentado → archivo en ./.cursor (host)
+      - CURSOR_DEBUG_LOG_PATH=/cursor/agent-debug/debug-33ab56.log
     ports:
       - "8002:8002"
     healthcheck:
@@ -62,6 +66,8 @@ services:
       dockerfile: Dockerfile
     image: biomont/backoffice-web:dev
     container_name: biomont-backoffice-web
+    volumes:
+      - ./.cursor:/cursor/agent-debug:rw
     env_file:
       - .env
     environment:

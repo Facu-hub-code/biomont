@@ -41,8 +41,23 @@ class DocumentRepository:
         self._pool = pool
 
     async def list_documents(self) -> list[DocumentRow]:
+        # Sin `markdown`: evita cargar megabytes por fila (lista del backoffice);
+        # el detalle usa `get_document`.
         query = """
-            SELECT d.*,
+            SELECT d.id,
+                   d.title,
+                   d.product_name,
+                   d.country_iso,
+                   d.language,
+                   d.status,
+                   d.source_filename,
+                   d.content_sha256,
+                   d.classification,
+                   d.uploaded_by,
+                   d.validated_by,
+                   d.validated_at,
+                   d.created_at,
+                   d.updated_at,
                    COALESCE(c.cnt, 0) AS chunk_count
             FROM public.documents d
             LEFT JOIN (
@@ -76,7 +91,25 @@ class DocumentRepository:
     async def find_by_content_sha256(self, sha: str) -> DocumentRow | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT *, 0 AS chunk_count FROM public.documents WHERE content_sha256 = $1",
+                """
+                SELECT id,
+                       title,
+                       product_name,
+                       country_iso,
+                       language,
+                       status,
+                       source_filename,
+                       content_sha256,
+                       classification,
+                       uploaded_by,
+                       validated_by,
+                       validated_at,
+                       created_at,
+                       updated_at,
+                       0 AS chunk_count
+                FROM public.documents
+                WHERE content_sha256 = $1
+                """,
                 sha,
             )
         return self._row_to_document(row) if row else None

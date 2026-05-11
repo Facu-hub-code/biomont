@@ -65,9 +65,36 @@ export async function apiRequest<T = unknown>(path: string, init: ApiInit = {}):
   });
   if (response.status === 204) return undefined as unknown as T;
   const text = await response.text();
-  const data = text ? JSON.parse(text) : undefined;
+  let data: unknown;
+  try {
+    data = text ? JSON.parse(text) : undefined;
+  } catch {
+    // #region agent log
+    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
+      body: JSON.stringify({
+        sessionId: "33ab56",
+        runId: "pre-fix",
+        hypothesisId: "H3",
+        location: "lib/api.ts:apiRequest",
+        message: "JSON.parse failed",
+        data: {
+          path,
+          status: response.status,
+          textPreview: text.slice(0, 200),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    throw new SyntaxError(`invalid JSON for ${path}`);
+  }
   if (!response.ok) {
-    const detail = (data && (data.detail ?? data.message)) ?? response.statusText;
+    const payload =
+      typeof data === "object" && data !== null ? (data as Record<string, unknown>) : undefined;
+    const raw = payload ? payload["detail"] ?? payload["message"] : undefined;
+    const detail = raw ?? response.statusText;
     throw new Error(typeof detail === "string" ? detail : "request failed");
   }
   return data as T;

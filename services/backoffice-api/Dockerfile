@@ -11,11 +11,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Dependencias de sistema minimas para asyncpg + docling + argon2.
+# Dependencias de sistema mínimas para asyncpg + docling + argon2.
+# docling/OpenCV cargan cv2 en import; en slim falta libGL → ImportError si no instalamos Mesa.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         libpq-dev \
+        libgl1 \
+        libglib2.0-0 \
         poppler-utils \
         tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*

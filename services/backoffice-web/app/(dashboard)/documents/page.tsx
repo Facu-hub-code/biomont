@@ -20,7 +20,24 @@ async function uploadDocumentAction(formData: FormData) {
   const { cookies } = await import("next/headers");
   const store = await cookies();
   const token = store.get("biomont_session")?.value;
-  if (!token) return;
+  if (!token) {
+    // #region agent log
+    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
+      body: JSON.stringify({
+        sessionId: "33ab56",
+        runId: "pre-fix",
+        hypothesisId: "H5",
+        location: "documents/page.tsx:uploadDocumentAction",
+        message: "no session token, action returns early",
+        data: {},
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    return;
+  }
 
   const upstream = new FormData();
   upstream.set("file", formData.get("file") as File);
@@ -36,15 +53,135 @@ async function uploadDocumentAction(formData: FormData) {
     body: upstream,
     headers: { Authorization: `Bearer ${token}` },
   });
+  // #region agent log
+  fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
+    body: JSON.stringify({
+      sessionId: "33ab56",
+      runId: "pre-fix",
+      hypothesisId: "H2",
+      location: "documents/page.tsx:uploadDocumentAction",
+      message: "POST /documents response",
+      data: { status: response.status, ok: response.ok, apiBaseHost: (() => { try { return new URL(apiBase).host; } catch { return "invalid"; } })() },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
   if (!response.ok) {
     const text = await response.text();
+    // #region agent log
+    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
+      body: JSON.stringify({
+        sessionId: "33ab56",
+        runId: "pre-fix",
+        hypothesisId: "H2",
+        location: "documents/page.tsx:uploadDocumentAction",
+        message: "POST /documents error body preview",
+        data: { status: response.status, bodyPreview: text.slice(0, 300) },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     throw new Error(text || `upload failed (${response.status})`);
   }
   revalidatePath("/documents");
+  // #region agent log
+  fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
+    body: JSON.stringify({
+      sessionId: "33ab56",
+      runId: "pre-fix",
+      hypothesisId: "H2",
+      location: "documents/page.tsx:uploadDocumentAction",
+      message: "upload ok, revalidatePath done",
+      data: {},
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 }
 
 export default async function DocumentsPage() {
-  const documents = await apiRequest<Document[]>("/documents");
+  let documents: Document[] = [];
+  try {
+    const raw = await apiRequest<Document[]>("/documents");
+    if (!Array.isArray(raw)) {
+      console.error(
+        "[bm-debug-33ab56]",
+        JSON.stringify({
+          hypothesisId: "H1",
+          message: "GET /documents not an array",
+          typeofPayload: typeof raw,
+          keys:
+            raw && typeof raw === "object" ? Object.keys(raw as object).slice(0, 20) : null,
+        }),
+      );
+      throw new Error("El API devolvió un formato inesperado al listar documentos.");
+    }
+    documents = raw;
+    // #region agent log
+    const first = documents[0];
+    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
+      body: JSON.stringify({
+        sessionId: "33ab56",
+        runId: "pre-fix",
+        hypothesisId: "H1",
+        location: "documents/page.tsx:DocumentsPage",
+        message: "GET /documents ok",
+        data: {
+          isArray: Array.isArray(documents),
+          length: documents.length,
+          firstUpdatedAt: first?.updated_at ?? null,
+          firstId: first?.id ?? null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  } catch (err) {
+    // #region agent log
+    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
+      body: JSON.stringify({
+        sessionId: "33ab56",
+        runId: "pre-fix",
+        hypothesisId: "H1",
+        location: "documents/page.tsx:DocumentsPage",
+        message: "GET /documents failed",
+        data: { err: err instanceof Error ? err.message : String(err) },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    throw err;
+  }
+  // #region agent log
+  fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
+    body: JSON.stringify({
+      sessionId: "33ab56",
+      runId: "pre-fix",
+      hypothesisId: "H4",
+      location: "documents/page.tsx:DocumentsPage",
+      message: "before render table",
+      data: {
+        sampleDatesOk: documents.every((d) => {
+          const t = Date.parse(d.updated_at);
+          return !Number.isNaN(t);
+        }),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
   return (
     <div className="space-y-8">
       <header>
