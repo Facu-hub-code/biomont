@@ -1,24 +1,16 @@
 -- =====================================================================
 -- seed_dev.sql
--- Datos minimos para desarrollo: 1 admin de backoffice + system prompt
--- inicial. Aplicar despues de las migraciones 001-003.
+-- Seed minimo de desarrollo: solo el system prompt v1.
 --
--- Password admin (dev): "biomont-admin" (argon2id, generado offline).
--- Cambiar la password apenas se levante el backoffice por primera vez.
+-- Para crear el primer admin del backoffice usar:
+--   ./scripts/seed_admin.sh <email> <password>
+-- (genera un hash argon2 valido en el momento, evitando hardcodear
+-- secrets en este archivo).
+--
+-- Aplicar despues de las migraciones 001..003.
 -- =====================================================================
 
 BEGIN;
-
-INSERT INTO public.bo_users (email, password_hash, name, role, is_active)
-VALUES (
-    'admin@biomont.local',
-    -- argon2id hash de "biomont-admin" (dev only). Reemplazar.
-    '$argon2id$v=19$m=65536,t=3,p=4$ZGV2c2FsdGRldnNhbHQ$jH8r1+vp5Mu1OmJgN3OWmGmGq3o6Qx0F8aR3lZyG7vQ',
-    'Admin Biomont',
-    'admin',
-    true
-)
-ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO public.system_prompts (version, content, is_active)
 VALUES (

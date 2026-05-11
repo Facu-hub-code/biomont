@@ -109,14 +109,21 @@ Para rollback manual (no recomendado en prod):
 railway run ./scripts/apply_migration.sh 003 --down
 ```
 
-Seed inicial opcional (admin + system prompt v1):
+Seeds iniciales:
 
 ```bash
+# 1. System prompt v1 (no contiene secrets, esta versionado en el repo)
 railway run psql -f scripts/seed_dev.sql
+
+# 2. Admin del backoffice: genera hash argon2 valido on-the-fly y lo inserta.
+#    No hardcodeamos credenciales en el repo. Requiere `argon2-cffi`
+#    instalado en python3 (`pip install argon2-cffi`).
+railway run ./scripts/seed_admin.sh admin@example.com 'unaPasswordFuerte'
 ```
 
-> El password del admin sembrado es `biomont-admin` y **debe cambiarse**
-> en la primera sesion.
+> **Importante**: el `EmailStr` de pydantic rechaza TLDs reservados
+> (`.local`, `.test`, etc.). Usar dominios publicos validos para los
+> emails del backoffice.
 
 ### 4. Levantar los servicios
 
