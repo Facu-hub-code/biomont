@@ -1,0 +1,54 @@
+%% Biomont: cómo se comunican los RTCs con el agente y los operadores con el backoffice.
+%% Ver también README.md (Arquitectura).
+
+flowchart TB
+  subgraph rtc["Canal RTC (representantes en campo)"]
+    direction TB
+    R1([RTC escribe en WhatsApp]) --> R2[Meta WhatsApp Cloud API]
+    R2 --> R3{Webhook agente<br/>POST /whatsapp/webhook}
+    R3 -->|Firma HMAC inválida| R_ERR([401: rechazado])
+    R3 -->|Mensaje de texto| R4[Agente: buscar RTC por teléfono]
+    R4 --> R5{¿En rtc_users<br/>habilitado + países?}
+    R5 -->|No| R_BLOCK([Respuesta neutra<br/>“no autorizado”])
+    R5 -->|Sí| R6[RAG: retrieval por país<br/>+ embeddings en Postgres]
+    R6 --> R7{LCEL / decisión}
+    R7 -->|Respuesta con citas válidas| R8[WhatsApp Client Graph API]
+    R7 -->|Sin info / baja confianza| R9[Crear ticket + mensaje al RTC]
+    R8 --> R10([RTC recibe respuesta en WhatsApp])
+    R9 --> R10
+    R6 --> OAI_R[(OpenAI)]
+  end
+
+  subgraph bo["Canal operadores backoffice (científicos / admin / viewer)"]
+    direction TB
+    B1([Operador abre el navegador]) --> B2[Next.js backoffice-web]
+    B2 --> B3{¿Sesión JWT<br/>en cookie httpOnly?}
+    B3 -->|No| B4[Página /login]
+    B4 --> B5[POST /auth/login<br/>email + password]
+    B5 --> B6[backoffice-api valida usuario]
+    B6 -->|OK| B7[Devuelve access_token]
+    B7 --> B8[Cookie biomont_session<br/>con el JWT]
+    B6 -->|Error| B4
+    B3 -->|Sí| B9[Dashboard / CRUD]
+    B8 --> B9
+    B9 --> B10{Peticiones API}
+    B10 -->|Browser| B11["fetch → NEXT_PUBLIC_API_BASE_URL"]
+    B10 -->|SSR / Server Actions| B12["fetch → API_INTERNAL_BASE_URL<br/>(Docker: backoffice-api:8002)"]
+    B11 --> B13[Authorization: Bearer JWT]
+    B12 --> B13
+    B13 --> B14[backoffice-api FastAPI<br/>/documents, /rtcs, /prompts, …]
+    B14 --> OAI_B[(OpenAI<br/>ETL / embeddings)]
+  end
+
+  DB[(Postgres + pgvector<br/>Railway · misma BD para agente y backoffice)]
+  R6 --> DB
+  R9 --> DB
+  B14 --> DB
+
+  classDef ext fill:#fff4e6,stroke:#c90;
+  classDef app fill:#e8f5e9,stroke:#2e7d32;
+  classDef api fill:#e3f2fd,stroke:#1565c0;
+
+  class R2,OAI_R,OAI_B ext;
+  class R8,R4,R6 api;
+  class B2,B14 app;

@@ -1,0 +1,31 @@
+flowchart TB
+  subgraph externos["Externos"]
+    WA["Meta WhatsApp<br/>Cloud API"]
+    OAI["OpenAI<br/>chat + embeddings"]
+    RY["Railway<br/>Postgres + pgvector"]
+  end
+
+  subgraph docker["Docker Compose (local / despliegue contenedorizado)"]
+    AG["agent :8001<br/>FastAPI + LangGraph"]
+    BOAPI["backoffice-api :8002<br/>FastAPI + Docling + ETL"]
+    WEB["backoffice-web :3000<br/>Next.js 16"]
+  end
+
+  subgraph repo["Monorepo"]
+    CMN["services/common<br/>asyncpg, schemas, RAG helpers, logging"]
+  end
+
+  WA <-->|webhook + Graph API| AG
+  AG -->|consultas SQL / vectores| RY
+  BOAPI -->|migraciones / CRUD / ETL| RY
+  AG --> OAI
+  BOAPI --> OAI
+
+  WEB -->|"HTTP JSON (SSR: API_INTERNAL_BASE_URL)"| BOAPI
+
+  AG -.->|pip install -e| CMN
+  BOAPI -.->|pip install -e| CMN
+
+  style RY fill:#e8f4fc
+  style WA fill:#fff4e6
+  style OAI fill:#f0f0f0
