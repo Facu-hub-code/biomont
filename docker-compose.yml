@@ -37,8 +37,25 @@ services:
       dockerfile: services/backoffice-api/Dockerfile
     image: biomont/backoffice-api:dev
     container_name: biomont-backoffice-api
+    # Código montado + --reload: iterar sin rebuild cuando solo cambia Python.
+    # Dependencias pesadas ([etl]) siguen viniendo de la imagen construida una vez.
     volumes:
+      - ./services/common:/app/services/common:rw
+      - ./services/backoffice-api:/app/services/backoffice-api:rw
       - ./.cursor:/cursor/agent-debug:rw
+    # Puerto fijo 8002 en Compose (coincide con published). Evita sh -c + $$PORT, que en shell expande $$ al PID.
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8002"
+      - --reload
+      - --reload-dir
+      - /app/services/backoffice-api/src
+      - --reload-dir
+      - /app/services/common/src
     env_file:
       - .env
     environment:

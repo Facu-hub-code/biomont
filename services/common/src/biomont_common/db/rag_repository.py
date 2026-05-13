@@ -7,14 +7,37 @@ herramientas).
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 from uuid import UUID
 
 import asyncpg
 import numpy as np
 
 from biomont_common.db.pool import DatabasePool
+
+
+def _metadata_row_to_dict(value: Any) -> dict:
+    """Normaliza `document_chunks.metadata` traído por asyncpg.
+
+    Según tipo de columna/driver, puede llegar como ``dict`` o como ``str``
+    JSON; ``dict("...")`` provoca ``ValueError``.
+    """
+
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return {}
+        parsed = json.loads(stripped)
+        return parsed if isinstance(parsed, dict) else {}
+    if isinstance(value, (bytes, bytearray)):
+        return _metadata_row_to_dict(value.decode())
+    return {}
 
 
 @dataclass(slots=True)
@@ -82,7 +105,7 @@ class RagRepository:
                 chunk_index=row["chunk_index"],
                 content=row["content"],
                 similarity=float(row["similarity"]),
-                metadata=dict(row["metadata"] or {}),
+                metadata=_metadata_row_to_dict(row["metadata"]),
             )
             for row in rows
         ]
