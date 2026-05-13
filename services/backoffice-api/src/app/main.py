@@ -17,8 +17,10 @@ from biomont_common.logging import configure_logging, get_logger
 
 from app.api.analytics_router import router as analytics_router
 from app.api.auth_router import router as auth_router
+from app.api.conversations_router import router as conversations_router
 from app.api.documents_router import router as documents_router
 from app.api.health_router import router as health_router
+from app.api.playground_bo_router import router as playground_bo_router
 from app.api.rtcs_router import router as rtcs_router
 from app.api.system_prompt_router import router as system_prompt_router
 from app.api.tickets_router import router as tickets_router
@@ -75,6 +77,8 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(documents_router)
     app.include_router(rtcs_router)
+    app.include_router(conversations_router)
+    app.include_router(playground_bo_router)
     app.include_router(system_prompt_router)
     app.include_router(tickets_router)
     app.include_router(analytics_router)

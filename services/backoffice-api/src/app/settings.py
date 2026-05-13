@@ -18,6 +18,15 @@ class BackofficeApiSettings(BaseSettings):
         alias="BACKOFFICE_API_CORS_ORIGINS",
     )
 
+    agent_internal_base_url: str = Field(
+        "http://localhost:8001",
+        alias="AGENT_INTERNAL_BASE_URL",
+    )
+    agent_playground_secret: SecretStr | None = Field(
+        None,
+        alias="AGENT_PLAYGROUND_SECRET",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

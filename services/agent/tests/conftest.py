@@ -45,6 +45,12 @@ class FakeRtcRepository:
     async def find_by_phone(self, phone_e164: str):
         return self._users.get(phone_e164)
 
+    async def find_by_id(self, rtc_user_id: UUID):
+        for u in self._users.values():
+            if u.id == rtc_user_id:
+                return u
+        return None
+
 
 class FakeConversationRepository:
     def __init__(self) -> None:

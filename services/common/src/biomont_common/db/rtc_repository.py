@@ -38,10 +38,33 @@ class RtcRepository:
             row = await conn.fetchrow(query, phone_e164)
         if row is None:
             return None
-        return RtcUser(
-            id=row["id"],
-            phone_e164=row["phone_e164"],
-            name=row["name"],
-            enabled=row["enabled"],
-            countries=list(row["countries"] or []),
-        )
+        return _row_to_rtc_user(row)
+
+    async def find_by_id(self, rtc_user_id: UUID) -> RtcUser | None:
+        query = """
+            SELECT u.id, u.phone_e164, u.name, u.enabled,
+                   COALESCE(
+                       array_agg(c.country_iso) FILTER (WHERE c.country_iso IS NOT NULL),
+                       ARRAY[]::char(2)[]
+                   ) AS countries
+            FROM public.rtc_users u
+            LEFT JOIN public.rtc_user_countries c
+                ON c.rtc_user_id = u.id
+            WHERE u.id = $1
+            GROUP BY u.id
+        """
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(query, rtc_user_id)
+        if row is None:
+            return None
+        return _row_to_rtc_user(row)
+
+
+def _row_to_rtc_user(row) -> RtcUser:
+    return RtcUser(
+        id=row["id"],
+        phone_e164=row["phone_e164"],
+        name=row["name"],
+        enabled=row["enabled"],
+        countries=list(row["countries"] or []),
+    )

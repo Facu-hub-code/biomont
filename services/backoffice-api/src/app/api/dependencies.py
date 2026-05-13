@@ -19,6 +19,7 @@ from biomont_common.db.rag_repository import RagRepository
 from app.db.analytics_repository import AnalyticsRepository
 from app.db.audit_repository import AuditRepository
 from app.db.bo_user_repository import BoUserRepository, BoUserRow
+from app.db.conversation_admin_repository import ConversationAdminRepository
 from app.db.document_repository import DocumentRepository
 from app.db.rtc_admin_repository import RtcAdminRepository
 from app.db.system_prompt_admin_repository import SystemPromptAdminRepository
@@ -64,6 +65,12 @@ def get_audit(pool: Annotated[DatabasePool, Depends(get_pool)]) -> AuditReposito
 
 def get_analytics(pool: Annotated[DatabasePool, Depends(get_pool)]) -> AnalyticsRepository:
     return AnalyticsRepository(pool)
+
+
+def get_conversations(
+    pool: Annotated[DatabasePool, Depends(get_pool)],
+) -> ConversationAdminRepository:
+    return ConversationAdminRepository(pool)
 
 
 def _extract_bearer_token(authorization: str | None) -> str:

@@ -16,6 +16,7 @@ async function logoutAction() {
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/conversations", label: "Chats" },
   { href: "/documents", label: "Documentos" },
   { href: "/rtcs", label: "RTCs" },
   { href: "/prompts", label: "System prompt" },

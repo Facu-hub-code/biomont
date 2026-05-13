@@ -43,10 +43,14 @@ services:
       - .env
     environment:
       - SERVICE_NAME=backoffice-api
+      - AGENT_INTERNAL_BASE_URL=http://agent:8001
       # Debug NDJSON desde el código instrumentado → archivo en ./.cursor (host)
       - CURSOR_DEBUG_LOG_PATH=/cursor/agent-debug/debug-33ab56.log
     ports:
       - "8002:8002"
+    depends_on:
+      agent:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD-SHELL

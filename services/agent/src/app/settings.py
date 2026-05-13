@@ -31,6 +31,9 @@ class AgentSettings(BaseSettings):
     system_prompt_cache_ttl_seconds: int = Field(
         60, alias="AGENT_SYSTEM_PROMPT_CACHE_TTL_SECONDS"
     )
+    playground_secret: SecretStr | None = Field(
+        None, alias="AGENT_PLAYGROUND_SECRET"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -25,6 +25,7 @@ from biomont_common.logging import configure_logging, get_logger
 from app.agent.orchestrator import AgentOrchestrator
 from app.agent.rag_pipeline import RagPipeline
 from app.api.health_router import router as health_router
+from app.api.playground_router import router as playground_router
 from app.api.whatsapp_router import router as whatsapp_router
 from app.integrations.whatsapp_client import MetaWhatsAppClient
 from app.settings import get_agent_settings
@@ -100,6 +101,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health_router)
+    app.include_router(playground_router)
     app.include_router(whatsapp_router)
     return app
 

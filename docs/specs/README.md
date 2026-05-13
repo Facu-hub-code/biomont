@@ -17,6 +17,7 @@ este directorio.
 | ID | Titulo | Estado |
 | --- | --- | --- |
 | 001 | [Foundation v1: bootstrap, RAG, agente WhatsApp, backoffice](./001-foundation-v1.md) | en curso |
+| 002 | [Vista espejo de conversaciones y playground del agente](./002-agent-conversations-mirror-and-playground.md) | borrador |
 
 ## Reglas de calidad
 

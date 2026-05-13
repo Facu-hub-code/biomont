@@ -169,3 +169,34 @@ async def test_orchestrator_low_confidence_when_pipeline_has_no_citations(
     assert result.decision == "low_confidence"
     assert len(conv.tickets) == 1
     assert conv.tickets[0]["ticket_type"] == "low_confidence"
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_playground_skips_whatsapp(fake_rtc_user) -> None:
+    output = PipelineOutput(
+        retrieved=[],
+        top_similarity=0.0,
+        answer=None,
+        raw_answer_text=None,
+    )
+    rtc_users = {fake_rtc_user.phone_e164: fake_rtc_user}
+    conv = FakeConversationRepository()
+    wa = FakeWhatsAppClient()
+    orchestrator = AgentOrchestrator(
+        rtc_repository=FakeRtcRepository(rtc_users),  # type: ignore[arg-type]
+        conversation_repository=conv,  # type: ignore[arg-type]
+        system_prompt_repository=FakeSystemPromptRepository(
+            FakeActivePrompt(version=1, content="System prompt v1.")
+        ),  # type: ignore[arg-type]
+        pipeline=_StaticPipeline(output),  # type: ignore[arg-type]
+        whatsapp_client=wa,  # type: ignore[arg-type]
+        similarity_threshold=0.75,
+    )
+
+    result = await orchestrator.handle_playground_message(
+        rtc_user_id=fake_rtc_user.id,
+        text_body="hola desde playground",
+    )
+
+    assert result.decision == "no_match"
+    assert not wa.sent
