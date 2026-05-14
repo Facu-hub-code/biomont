@@ -109,7 +109,7 @@ class FaqRepository:
                 WHERE ($2::uuid IS NULL OR f.product_id = $2)
                   AND (
                       f.tsv @@ plainto_tsquery('spanish', $4)
-                      OR f.normalized_question %% $5
+                      OR f.normalized_question % $5
                   )
                 ORDER BY bm_score DESC
                 LIMIT $3
