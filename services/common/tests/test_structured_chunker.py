@@ -36,6 +36,148 @@ Notas varias.
 """
 
 
+_BITACORA_DOT_STYLE = """\
+1. Generalidades del principio activo
+
+Texto de generalidades.
+
+1.1 Mecanismo de accion
+
+Detalle mecanismo.
+
+2. Protocolos de uso
+
+Lista de protocolos.
+"""
+
+
+_BITACORA_MARKDOWN_HEADINGS = """\
+## Bitácora
+
+## 1° Generalidades del principio activo
+
+Intro.
+
+1.1 Interacciones con otras drogas
+
+Detalle interacciones.
+
+## 2° Protocolos de uso
+
+Cierre.
+"""
+
+
+_TILOZONA_STYLE_BODY_ENUM = """\
+2. PROTOCOLOS DE USO
+
+Intro protocolos.
+
+1. Control etiológico bacteriano mediante la acción combinada de tilosina y
+
+Cuerpo enumerado.
+
+1. Generalidades del principio activo
+
+Otra seccion valida.
+
+1.1 Subseccion nueva
+
+Texto.
+"""
+
+
+_BALOTARIO_NUMBERED = """\
+Preguntas frecuentes.
+
+1. ¿Por qué se recomienda el producto?
+
+Porque la evidencia lo respalda.
+
+2 ¿Se puede repetir la dosis?
+
+Solo bajo criterio veterinario.
+
+• ¿Hay retiro?
+
+No aplicable en caso X.
+"""
+
+
+def test_bitacora_macro_dot_family_detects_sections():
+    chunker = StructuredMarkdownChunker(chunk_tokens=1000)
+    result = chunker.split(_BITACORA_DOT_STYLE, kind=DocumentKind.bitacora)
+
+    macros = [s for s in result.sections if s.kind == "bitacora_macro"]
+    nums = {s.number for s in macros}
+    assert "1" in nums
+    assert "2" in nums
+    assert any(s.number == "1.1" for s in result.sections)
+
+
+def test_bitacora_markdown_heading_before_degree_macro():
+    chunker = StructuredMarkdownChunker(chunk_tokens=1000)
+    result = chunker.split(_BITACORA_MARKDOWN_HEADINGS, kind=DocumentKind.bitacora)
+
+    assert any("Generalidades" in (s.title or "") for s in result.sections)
+    assert any(s.title and "Protocolos" in s.title for s in result.sections)
+
+
+def test_bitacora_rejects_tilozona_style_mediante_enumeration_as_macro():
+    chunker = StructuredMarkdownChunker(chunk_tokens=1000)
+    result = chunker.split(_TILOZONA_STYLE_BODY_ENUM, kind=DocumentKind.bitacora)
+
+    blob = "\n".join(s.raw_text for s in result.sections)
+    assert "Control etiológico" in blob
+    assert any("Generalidades" in (s.title or "") for s in result.sections)
+    titles_lower = {(s.title or "").lower() for s in result.sections}
+    assert not any("mediante la acción" in t for t in titles_lower)
+
+
+def test_bitacora_subsection_accepts_extra_dot_before_title():
+    md = """\
+1. Generalidades del principio activo
+
+Intro.
+
+1.2. Interacciones con otras drogas
+
+Detalle.
+"""
+    chunker = StructuredMarkdownChunker(chunk_tokens=1000)
+    result = chunker.split(md, kind=DocumentKind.bitacora)
+    subs = [s for s in result.sections if s.kind == "bitacora_sub"]
+    assert any(s.number == "1.2" and "Interacciones" in (s.title or "") for s in subs)
+
+
+def test_balotario_detects_numbered_and_bullet_questions():
+    chunker = StructuredMarkdownChunker(chunk_tokens=1000)
+    result = chunker.split(_BALOTARIO_NUMBERED, kind=DocumentKind.balotario)
+
+    assert len(result.sections) == 3
+    nums = [s.number for s in result.sections]
+    assert "1" in nums
+    assert "2" in nums
+    assert any(s.number == "3" for s in result.sections)
+
+
+def test_ficha_tecnica_matches_section_after_markdown_heading():
+    md = """\
+## 1. NOMBRE COMERCIAL DEL PRODUCTO
+
+Proteggo.
+
+## 2. DOSIFICACION
+
+25 mg/kg via oral.
+"""
+    chunker = StructuredMarkdownChunker(chunk_tokens=1000)
+    result = chunker.split(md, kind=DocumentKind.ficha_tecnica)
+
+    assert any(s.title == "NOMBRE COMERCIAL DEL PRODUCTO" for s in result.sections)
+    assert any("DOSIFICACION" in (s.title or "") for s in result.sections)
+
+
 _BITACORA_MARKDOWN = """\
 1° GENERALIDADES DEL PRINCIPIO ACTIVO
 

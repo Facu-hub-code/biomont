@@ -159,16 +159,28 @@ class MarkdownChunker:
 # Regex de seccionado por tipo de documento.
 # Las cabeceras del PDF llegan en mayusculas o con numeracion mixta; estos
 # patrones cubren los layouts observados en los PDFs reales del corpus.
+# Docling suele anteponer `## ` — ver `_line_for_structure_match`.
+_MARKDOWN_HEADING_PREFIX_RE = re.compile(r"^\s*#{1,6}\s+")
 _FT_SECTION_RE = re.compile(
     r"^\s*(?P<num>\d{1,2})\.\s+(?P<title>[A-Z][A-ZÁÉÍÓÚÑ0-9 ,\.\-/]+)\s*$"
 )
 _BITACORA_MACRO_RE = re.compile(
-    r"^\s*(?P<num>\d{1,2})°\s+(?P<title>.+?)\s*$"
+    r"^\s*(?P<num>\d{1,2})\s*[°º]\s+(?P<title>.+?)\s*$"
+)
+# Macro "1. Generalidades..."; filtro `_accept_bitacora_macro_dot`.
+_BITACORA_MACRO_DOT_RE = re.compile(
+    r"^\s*(?P<num>\d{1,2})\.\s+(?P<title>.+)\s*$"
 )
 _BITACORA_SUB_RE = re.compile(
-    r"^\s*(?P<num>\d{1,2}\.\d{1,2})\s+(?P<title>.+?)\s*$"
+    r"^\s*(?P<num>\d{1,2}\.\d{1,2})\.?\s+(?P<title>.+?)\s*$"
 )
 _BALOTARIO_Q_RE = re.compile(r"^\s*•\s*¿(?P<question>.+?)\?\s*$")
+_BALOTARIO_NUMBERED_DOT_Q_RE = re.compile(
+    r"^\s*(?P<num>\d{1,2})\s*\.\s*(?P<question>¿.+?\?)\s*$",
+)
+_BALOTARIO_NUMBERED_SPACE_Q_RE = re.compile(
+    r"^\s*(?P<num>\d{1,2})\s+(?P<question>¿.+?\?)\s*$",
+)
 _PAGE_BREAK_RE = re.compile(r"^-{2,}\s*\d+\s*of\s*\d+\s*-{2,}$")
 
 _DOSE_PATTERNS = [
@@ -306,6 +318,61 @@ def _detect_species(text: str) -> list[str]:
     return sorted(found)
 
 
+def _line_for_structure_match(line: str) -> str:
+    """Quita prefijo Markdown (`# `–`###### `) que Docling/antiguos conversores ponen."""
+
+    stripped = line.strip("\r")
+    stripped = _MARKDOWN_HEADING_PREFIX_RE.sub("", stripped, count=1)
+    return stripped.strip()
+
+
+def _accept_bitacora_macro_dot(title: str) -> bool:
+    """Heuristica sobre titulos macro `N.` (Familia B) segun corpus real."""
+
+    t = title.strip()
+    if not t or len(t) > 92:
+        return False
+    tl = t.lower()
+    if " mediante " in tl:
+        return False
+    # Enumeraciones microbiologicas sueltas dentro de capitulos (MARVO).
+    if re.match(
+        r"(?i)^bacterias\s+(gram|[a-z]+)|^strepto|^pasteur|^pseudo|^sapro",
+        t,
+    ):
+        return False
+    if re.match(r"(?i)^otros\s+microorganism", t):
+        return False
+    hints = (
+        "generalidades",
+        "principio activo",
+        "protocol",
+        "precaucion",
+        "interaccion",
+        "efecto advers",
+        "efecto colateral",
+        "formulacion",
+        "argumentos",
+        "bloque",
+        "mecanismo",
+        "farmaco",
+        "qué sí",
+        "que sí",
+        "enfermedad",
+        "aplicaci",
+        "momentos estr",
+        "integral del manejo",
+        "uso en",
+        "externos",
+        "competidor",
+        "terapeutic",
+        "comparativ",
+        "uso on-label",
+        "dosis según",
+    )
+    return any(h in tl for h in hints)
+
+
 class StructuredChunkerError(RuntimeError):
     """Error explicito cuando el parser no detecta secciones en un kind."""
 
@@ -394,7 +461,8 @@ class StructuredMarkdownChunker:
             )
 
         for line in text.splitlines():
-            match = _FT_SECTION_RE.match(line)
+            probe = _line_for_structure_match(line)
+            match = _FT_SECTION_RE.match(probe)
             if match:
                 if current_num is not None or current_lines:
                     flush()
@@ -410,7 +478,7 @@ class StructuredMarkdownChunker:
         return sections
 
     def _split_bitacora(self, text: str) -> list[StructuredSection]:
-        """Detecta macro-secciones `N°` y subsecciones `N.M`."""
+        """Detecta macro-secciones (`N°` o `N.` filtrado) y subsecciones `N.M`."""
 
         sections: list[StructuredSection] = []
         macro_stack: dict[str, int] = {}
@@ -444,24 +512,36 @@ class StructuredMarkdownChunker:
                 current_macro_index = len(sections) - 1
 
         for line in text.splitlines():
-            macro = _BITACORA_MACRO_RE.match(line)
-            sub = _BITACORA_SUB_RE.match(line)
-            if macro:
-                if current_num is not None or current_lines:
-                    flush()
-                current_num = macro.group("num")
-                current_title = macro.group("title").strip()
-                current_kind = "bitacora_macro"
-                current_lines = [line]
-            elif sub:
+            probe = _line_for_structure_match(line)
+            sub = _BITACORA_SUB_RE.match(probe)
+            macro_deg = None if sub else _BITACORA_MACRO_RE.match(probe)
+            macro_dot = None
+            if sub is None and macro_deg is None:
+                md = _BITACORA_MACRO_DOT_RE.match(probe)
+                if md and _accept_bitacora_macro_dot(md.group("title")):
+                    macro_dot = md
+            if sub:
                 if current_num is not None or current_lines:
                     flush()
                 current_num = sub.group("num")
                 current_title = sub.group("title").strip()
                 current_kind = "bitacora_sub"
-                # Inferimos el padre por el prefijo numerico (`2.1` -> `2`).
                 macro_num = current_num.split(".")[0]
                 current_macro_index = macro_stack.get(macro_num)
+                current_lines = [line]
+            elif macro_deg:
+                if current_num is not None or current_lines:
+                    flush()
+                current_num = macro_deg.group("num")
+                current_title = macro_deg.group("title").strip()
+                current_kind = "bitacora_macro"
+                current_lines = [line]
+            elif macro_dot:
+                if current_num is not None or current_lines:
+                    flush()
+                current_num = macro_dot.group("num")
+                current_title = macro_dot.group("title").strip()
+                current_kind = "bitacora_macro"
                 current_lines = [line]
             else:
                 current_lines.append(line)
@@ -472,31 +552,51 @@ class StructuredMarkdownChunker:
         return sections
 
     def _split_balotario(self, text: str) -> list[StructuredSection]:
-        """Detecta pares pregunta-respuesta tipo `• ¿...?` + bloque."""
+        """Pares pregunta-respuesta: viñeta `• ¿...?`, `N. ¿...?`, `N ¿...?`."""
 
         sections: list[StructuredSection] = []
         current_question: str | None = None
+        current_number: str | None = None
         current_lines: list[str] = []
 
         def flush() -> None:
+            nonlocal current_number
             if current_question is None:
                 return
+            num_out = current_number if current_number is not None else str(len(sections) + 1)
             sections.append(
                 StructuredSection(
                     index=len(sections),
-                    number=str(len(sections) + 1),
+                    number=num_out,
                     title=current_question,
                     kind="balotario",
                     raw_text="\n".join(current_lines).strip(),
                 )
             )
+            current_number = None
 
         for line in text.splitlines():
-            match = _BALOTARIO_Q_RE.match(line)
-            if match:
+            probe = _line_for_structure_match(line)
+            m_bullet = _BALOTARIO_Q_RE.match(probe)
+            m_num_dot = None if m_bullet else _BALOTARIO_NUMBERED_DOT_Q_RE.match(probe)
+            m_num_sp = (
+                None
+                if m_bullet or m_num_dot
+                else _BALOTARIO_NUMBERED_SPACE_Q_RE.match(probe)
+            )
+            matched = m_bullet or m_num_dot or m_num_sp
+            if matched:
                 if current_question is not None:
                     flush()
-                current_question = match.group("question").strip()
+                if m_bullet:
+                    current_number = None
+                    current_question = m_bullet.group("question").strip()
+                elif m_num_dot:
+                    current_number = m_num_dot.group("num")
+                    current_question = m_num_dot.group("question").strip()
+                elif m_num_sp:
+                    current_number = m_num_sp.group("num")
+                    current_question = m_num_sp.group("question").strip()
                 current_lines = [line]
             else:
                 if current_question is not None:
