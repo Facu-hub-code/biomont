@@ -10,6 +10,8 @@ DocumentStatus = Literal[
     "draft", "processing", "validated", "archived", "failed"
 ]
 
+DocumentKindLiteral = Literal["ficha_tecnica", "bitacora", "balotario"]
+
 
 class DocumentSummary(BaseModel):
     id: UUID
@@ -24,6 +26,8 @@ class DocumentSummary(BaseModel):
     validated_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    kind: DocumentKindLiteral = "bitacora"
+    product_id: UUID | None = None
     chunk_count: int = 0
 
 
@@ -38,3 +42,14 @@ class DocumentUpdate(BaseModel):
     language: str | None = Field(default=None, min_length=2, max_length=2)
     status: DocumentStatus | None = None
     classification: dict | None = None
+    kind: DocumentKindLiteral | None = None
+    product_id: UUID | None = None
+
+
+class ReingestResponse(BaseModel):
+    document_id: UUID
+    legacy_chunks: int
+    knowledge_chunks: int
+    sections: int
+    faq_entries: int
+    markdown_chars: int

@@ -14,6 +14,9 @@ from uuid import UUID
 
 import pytest
 
+from biomont_common.schemas.knowledge import DocumentKind, FaqHit, HybridChunkHit
+from biomont_common.schemas.products import ProductCandidate
+
 # Setear variables minimas antes de cualquier import del codigo de app.
 os.environ.setdefault("DATABASE_URL", "postgres://user:pass@localhost/test")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test")
@@ -139,6 +142,91 @@ class FakeEmbeddings:
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         return [[0.0] * 1536 for _ in texts]
+
+
+# ----------------------------------------------------------------------
+# Fakes spec 003 (grafo)
+# ----------------------------------------------------------------------
+
+
+class FakeProductRepository:
+    """Fake controlado para el ProductResolver."""
+
+    def __init__(
+        self,
+        candidates: Sequence[ProductCandidate] | None = None,
+        by_id: dict[UUID, Any] | None = None,
+    ) -> None:
+        self.candidates = list(candidates or [])
+        self.by_id = dict(by_id or {})
+        self.last_query: str | None = None
+
+    async def search_candidates(
+        self,
+        query_text: str,
+        *,
+        allowed_countries=None,
+        limit: int = 5,
+    ) -> list[ProductCandidate]:
+        self.last_query = query_text
+        return list(self.candidates[:limit])
+
+    async def get_by_id(self, product_id: UUID):
+        return self.by_id.get(product_id)
+
+
+class FakeFaqRepository:
+    def __init__(self, hits: Sequence[FaqHit] | None = None) -> None:
+        self._hits = list(hits or [])
+
+    async def search(self, **_kwargs: Any) -> list[FaqHit]:
+        return list(self._hits)
+
+
+class FakeHybridRagRepository:
+    def __init__(self, hits: Sequence[HybridChunkHit] | None = None) -> None:
+        self._hits = list(hits or [])
+        self.last_call: dict[str, Any] | None = None
+
+    async def search_hybrid_chunks(self, **kwargs: Any) -> list[HybridChunkHit]:
+        self.last_call = dict(kwargs)
+        return list(self._hits)
+
+    async def search_similar_chunks(self, **kwargs: Any):  # legacy compatibility
+        return []
+
+
+class FakeConversationStateRepository:
+    def __init__(self) -> None:
+        self.state_by_conv: dict[UUID, dict[str, Any]] = {}
+
+    async def get(self, conversation_id: UUID):
+        return self.state_by_conv.get(conversation_id)
+
+    async def upsert(self, **kwargs: Any) -> None:
+        conv = kwargs["conversation_id"]
+        self.state_by_conv[conv] = kwargs
+
+
+@pytest.fixture()
+def fake_hybrid_chunks() -> list[HybridChunkHit]:
+    doc_id = uuid.uuid4()
+    return [
+        HybridChunkHit(
+            chunk_id=uuid.uuid4(),
+            document_id=doc_id,
+            document_title="Bitacora Proteggo 3M",
+            product_id=None,
+            kind=DocumentKind.bitacora,
+            chunk_index=0,
+            section_type="protocol",
+            content="Para DAPP usar Proteggo 3M segun protocolo.",
+            country_iso="PE",
+            vector_score=0.9,
+            bm25_score=0.8,
+            final_score=0.88,
+        ),
+    ]
 
 
 @pytest.fixture()

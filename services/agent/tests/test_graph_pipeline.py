@@ -1,0 +1,232 @@
+"""Tests del grafo end-to-end (spec 003).
+
+Mock todos los I/O externos. Verifica el flujo:
+
+- Intent classifier -> FAQ -> short circuit cuando hay hit directo.
+- Intent classifier -> hybrid retriever -> answerer.
+- Producto ambiguo -> END temprano (low_confidence).
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+
+import pytest
+
+from biomont_common.schemas.agent_graph import Intent
+from biomont_common.schemas.knowledge import DocumentKind, FaqHit
+from biomont_common.schemas.products import ProductCandidate
+from biomont_common.schemas.rag import RagAnswer
+
+from app.agent.graph.graph import build_graph
+
+from tests.conftest import (
+    FakeConversationStateRepository,
+    FakeEmbeddings,
+    FakeFaqRepository,
+    FakeHybridRagRepository,
+    FakeProductRepository,
+)
+
+
+@dataclass
+class _FakeIntent:
+    intent: Intent
+    confidence: float = 0.95
+
+
+class _FakeStructuredOutput:
+    def __init__(self, value):
+        self._value = value
+
+    async def ainvoke(self, _messages):
+        return self._value
+
+
+class _FakeChatModel:
+    """Devuelve outputs distintos segun el schema solicitado."""
+
+    def __init__(self, *, intent: Intent, answer: RagAnswer):
+        self._intent = intent
+        self._answer = answer
+
+    def with_structured_output(self, schema):
+        name = getattr(schema, "__name__", "")
+        if name == "IntentClassification":
+            return _FakeStructuredOutput(_FakeIntent(intent=self._intent))
+        if name == "RagAnswer":
+            return _FakeStructuredOutput(self._answer)
+        return _FakeStructuredOutput(self._answer)
+
+
+@pytest.mark.asyncio
+async def test_graph_faq_short_circuit(fake_hybrid_chunks):
+    doc_id = uuid.uuid4()
+    faq_repo = FakeFaqRepository(
+        hits=[
+            FaqHit(
+                faq_id=uuid.uuid4(),
+                product_id=None,
+                document_id=doc_id,
+                question="Puede usarse en gestacion?",
+                answer="Si, seguro en gestantes.",
+                final_score=0.95,
+            )
+        ]
+    )
+    rag_repo = FakeHybridRagRepository(hits=fake_hybrid_chunks)
+    product_repo = FakeProductRepository(candidates=[])
+    state_repo = FakeConversationStateRepository()
+
+    pipeline = build_graph(
+        rag_repository=rag_repo,
+        product_repository=product_repo,
+        faq_repository=faq_repo,
+        state_repository=state_repo,
+        embeddings=FakeEmbeddings(),
+        chat_model=_FakeChatModel(
+            intent=Intent.faq,
+            answer=RagAnswer(
+                answer="No deberia ejecutarse",
+                citations=[
+                    {
+                        "document_id": str(doc_id),
+                        "document_title": "x",
+                        "similarity": 0.5,
+                    }
+                ],
+            ),
+        ),
+    )
+
+    output = await pipeline.run(
+        query="Puede usarse en gestacion?",
+        allowed_countries=["PE"],
+        system_prompt="Sos asistente",
+        conversation_id=uuid.uuid4(),
+    )
+
+    assert output.faq_direct_answer == "Si, seguro en gestantes."
+    # Cuando hay short-circuit, no se llama al hybrid retriever.
+    assert output.retrieved == []
+    nodes_visited = {t.node for t in output.graph_trace}
+    assert "FAQRetriever" in nodes_visited
+    assert "HybridRetriever" not in nodes_visited
+    assert "Answerer" in nodes_visited
+
+
+@pytest.mark.asyncio
+async def test_graph_full_path_dosage_question(fake_hybrid_chunks):
+    product_id = uuid.uuid4()
+    doc_id = fake_hybrid_chunks[0].document_id
+    product_repo = FakeProductRepository(
+        candidates=[
+            ProductCandidate(
+                product_id=product_id,
+                product_name="Proteggo 3M",
+                alias_matched="proteggo 3m",
+                similarity=0.95,
+            )
+        ]
+    )
+    rag_repo = FakeHybridRagRepository(hits=fake_hybrid_chunks)
+    faq_repo = FakeFaqRepository(hits=[])
+    state_repo = FakeConversationStateRepository()
+
+    rag_answer = RagAnswer(
+        answer="Dosis: 25-56 mg/kg.",
+        citations=[
+            {
+                "document_id": str(doc_id),
+                "document_title": "Bitacora Proteggo 3M",
+                "similarity": 0.88,
+            }
+        ],
+    )
+
+    pipeline = build_graph(
+        rag_repository=rag_repo,
+        product_repository=product_repo,
+        faq_repository=faq_repo,
+        state_repository=state_repo,
+        embeddings=FakeEmbeddings(),
+        chat_model=_FakeChatModel(
+            intent=Intent.dosage_question, answer=rag_answer
+        ),
+    )
+
+    output = await pipeline.run(
+        query="dosis del proteggo 3m?",
+        allowed_countries=["PE"],
+        system_prompt="Sos asistente",
+        conversation_id=uuid.uuid4(),
+    )
+
+    assert output.product_id == product_id
+    assert output.intent == Intent.dosage_question
+    assert output.answer_text == "Dosis: 25-56 mg/kg."
+    assert rag_repo.last_call is not None
+    assert rag_repo.last_call["product_id"] == product_id
+    # MetaFilter aplica kinds para dosage_question.
+    assert rag_repo.last_call["kinds"]
+    assert DocumentKind.bitacora in rag_repo.last_call["kinds"]
+
+
+@pytest.mark.asyncio
+async def test_graph_ambiguous_product_short_circuits():
+    product_repo = FakeProductRepository(
+        candidates=[
+            ProductCandidate(
+                product_id=uuid.uuid4(),
+                product_name="Proteggo M",
+                alias_matched="proteggo",
+                similarity=0.60,
+            ),
+            ProductCandidate(
+                product_id=uuid.uuid4(),
+                product_name="Proteggo 3M",
+                alias_matched="proteggo 3m",
+                similarity=0.58,
+            ),
+        ]
+    )
+    rag_repo = FakeHybridRagRepository(hits=[])
+    faq_repo = FakeFaqRepository(hits=[])
+    state_repo = FakeConversationStateRepository()
+
+    pipeline = build_graph(
+        rag_repository=rag_repo,
+        product_repository=product_repo,
+        faq_repository=faq_repo,
+        state_repository=state_repo,
+        embeddings=FakeEmbeddings(),
+        chat_model=_FakeChatModel(
+            intent=Intent.dosage_question,
+            answer=RagAnswer(
+                answer="x",
+                citations=[
+                    {
+                        "document_id": str(uuid.uuid4()),
+                        "document_title": "x",
+                        "similarity": 0.1,
+                    }
+                ],
+            ),
+        ),
+    )
+
+    output = await pipeline.run(
+        query="proteggo dosis?",
+        allowed_countries=[],
+        system_prompt="x",
+        conversation_id=uuid.uuid4(),
+    )
+
+    assert output.ambiguous_candidates
+    assert output.answer_text is None
+    nodes = {t.node for t in output.graph_trace}
+    assert "ProductResolver" in nodes
+    # Cuando es ambiguo no se invoca retriever ni answerer.
+    assert "HybridRetriever" not in nodes
+    assert "Answerer" not in nodes

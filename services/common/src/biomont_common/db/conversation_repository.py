@@ -99,14 +99,15 @@ class ConversationRepository:
         retrieved: list[dict[str, Any]],
         top_similarity: float | None,
         system_prompt_version: int | None,
+        graph_trace: list[dict[str, Any]] | None = None,
     ) -> UUID:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 INSERT INTO public.agent_decisions
                     (message_id, decision, reasoning, retrieved,
-                     top_similarity, system_prompt_version)
-                VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+                     top_similarity, system_prompt_version, graph_trace)
+                VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb)
                 RETURNING id
                 """,
                 message_id,
@@ -115,6 +116,7 @@ class ConversationRepository:
                 json.dumps(retrieved),
                 top_similarity,
                 system_prompt_version,
+                json.dumps(graph_trace or []),
             )
             return row["id"]
 

@@ -12,7 +12,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from biomont_common.db.conversation_repository import ConversationRepository
+from biomont_common.db.conversation_state_repository import (
+    ConversationStateRepository,
+)
+from biomont_common.db.faq_repository import FaqRepository
 from biomont_common.db.pool import create_pool
+from biomont_common.db.product_repository import ProductRepository
 from biomont_common.db.rag_repository import RagRepository
 from biomont_common.db.rtc_repository import RtcRepository
 from biomont_common.db.system_prompt_repository import SystemPromptRepository
@@ -21,7 +26,9 @@ from biomont_common.integrations.openai_factory import (
     build_embeddings,
 )
 from biomont_common.logging import configure_logging, get_logger
+from biomont_common.settings import get_rag_settings
 
+from app.agent.graph.graph import build_graph
 from app.agent.orchestrator import AgentOrchestrator
 from app.agent.rag_pipeline import RagPipeline
 from app.api.health_router import router as health_router
@@ -69,16 +76,44 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     embeddings = build_embeddings()
     chat_model = build_chat_model()
 
-    pipeline = RagPipeline(
-        rag=rag,
-        embeddings=embeddings,
-        chat_model=chat_model,
-        top_k=agent_settings.top_k,
-    )
+    rag_settings = get_rag_settings()
+    product_repo = ProductRepository(pool)
+    faq_repo = FaqRepository(pool)
+    state_repo = ConversationStateRepository(pool)
+
+    if rag_settings.agent_use_graph:
+        pipeline = build_graph(
+            rag_repository=rag,
+            product_repository=product_repo,
+            faq_repository=faq_repo,
+            state_repository=state_repo,
+            embeddings=embeddings,
+            chat_model=chat_model,
+            settings=rag_settings,
+        )
+        logger.info(
+            "agent_pipeline_selected",
+            action="pipeline_init",
+            pipeline="graph",
+        )
+    else:
+        pipeline = RagPipeline(
+            rag=rag,
+            embeddings=embeddings,
+            chat_model=chat_model,
+            top_k=agent_settings.top_k,
+        )
+        logger.info(
+            "agent_pipeline_selected",
+            action="pipeline_init",
+            pipeline="lcel",
+        )
+
     orchestrator = AgentOrchestrator(
         rtc_repository=rtc_repo,
         conversation_repository=conv_repo,
         system_prompt_repository=prompt_repo,
+        conversation_state_repository=state_repo,
         pipeline=pipeline,
         whatsapp_client=whatsapp_client,
         similarity_threshold=agent_settings.similarity_threshold,

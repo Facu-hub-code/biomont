@@ -1,0 +1,8 @@
+{
+  "accuracy": 0.80,
+  "intent_match_rate": 0.80,
+  "product_match_rate": 0.80,
+  "answered_substring_match_rate": 0.80,
+  "kinds_match_rate": 0.60,
+  "notes": "Baseline conservador (80%) usado como gate de regresion del marker `pytest -m eval`. Al promover a produccion, el equipo de ciencia debe actualizar con la media observada en 3 corridas contra el corpus real y bajar el `_MAX_REGRESSION` a 0.05 (5pp) en services/agent/tests/test_golden_set_eval.py."
+}

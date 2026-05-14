@@ -37,7 +37,9 @@ class OpenAISettings(BaseSettings):
     embeddings_model: str = Field(
         "text-embedding-3-small", alias="OPENAI_EMBEDDINGS_MODEL"
     )
-    embeddings_dim: int = 1536
+    # Dim parametrizable: 1536 (3-small), 3072 (3-large). Si cambia, requiere
+    # reingesta total del corpus (los chunks viejos quedan incomparables).
+    embeddings_dim: int = Field(1536, alias="OPENAI_EMBEDDINGS_DIM")
     request_timeout_s: float = Field(30.0, alias="OPENAI_REQUEST_TIMEOUT")
 
     model_config = SettingsConfigDict(
@@ -62,6 +64,43 @@ class LoggingSettings(BaseSettings):
     )
 
 
+class RagSettings(BaseSettings):
+    """Settings del pipeline RAG y del grafo del agente (spec 003).
+
+    Todos los pesos y umbrales son hot-tunables por env sin redeploy de
+    schema. Si se cambia `embeddings_dim` desde `OpenAISettings`, requiere
+    reingesta total.
+    """
+
+    # Fusion hibrida vector + BM25.
+    vector_weight: float = Field(0.7, alias="RAG_VECTOR_WEIGHT")
+    bm25_weight: float = Field(0.3, alias="RAG_BM25_WEIGHT")
+    top_k: int = Field(6, alias="RAG_TOP_K")
+    candidate_k: int = Field(25, alias="RAG_CANDIDATE_K")
+
+    # Product resolver deterministico (pg_trgm + aliases).
+    product_resolver_threshold: float = Field(
+        0.55, alias="PRODUCT_RESOLVER_THRESHOLD"
+    )
+    product_resolver_margin: float = Field(
+        0.10, alias="PRODUCT_RESOLVER_MARGIN"
+    )
+
+    # FAQ retrieval directo.
+    faq_direct_threshold: float = Field(0.80, alias="FAQ_DIRECT_THRESHOLD")
+
+    # Feature flag de corte: si False, el agente sigue usando el pipeline
+    # LCEL viejo contra document_chunks (camino de rollback).
+    agent_use_graph: bool = Field(True, alias="AGENT_USE_GRAPH")
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+
 @lru_cache(maxsize=1)
 def get_database_settings() -> DatabaseSettings:
     return DatabaseSettings()
@@ -75,3 +114,8 @@ def get_openai_settings() -> OpenAISettings:
 @lru_cache(maxsize=1)
 def get_logging_settings() -> LoggingSettings:
     return LoggingSettings()
+
+
+@lru_cache(maxsize=1)
+def get_rag_settings() -> RagSettings:
+    return RagSettings()

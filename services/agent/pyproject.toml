@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "httpx>=0.27",
+    "langgraph>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +21,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "httpx>=0.27",
     "respx>=0.21",
+    "pyyaml>=6.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -28,3 +30,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "-q"
+pythonpath = ["src"]
+markers = [
+    "eval: marca tests de evaluacion del golden set (se corren con pytest -m eval)",
+]

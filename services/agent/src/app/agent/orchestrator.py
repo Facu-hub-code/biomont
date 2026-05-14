@@ -4,9 +4,9 @@ Orquesta:
 1. Lookup del RTC en `rtc_users`.
 2. Gate de autorizacion + envio del mensaje "no autorizado" si falla.
 3. Recupera el system prompt activo.
-4. Ejecuta el pipeline LCEL (RAG + structured output).
-5. Decide answered / low_confidence / no_match.
-6. Persiste mensajes + decision + ticket si aplica.
+4. Ejecuta el pipeline (LCEL clasico o grafo LangGraph segun flag spec 003).
+5. Decide answered / low_confidence / no_match / ambiguous_product.
+6. Persiste mensajes + decision (con graph_trace si aplica) + ticket.
 7. Envia la respuesta por WhatsApp (opcional en playground).
 
 Disenado para ser facil de testear: las dependencias se inyectan y todas
@@ -17,15 +17,19 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from biomont_common.db.conversation_repository import ConversationRepository
+from biomont_common.db.conversation_state_repository import (
+    ConversationStateRepository,
+)
 from biomont_common.db.rtc_repository import RtcRepository, RtcUser
 from biomont_common.db.system_prompt_repository import SystemPromptRepository
 from biomont_common.logging import get_logger
-from biomont_common.schemas.rag import RagAnswer
+from biomont_common.schemas.rag import Citation, RagAnswer
 
+from app.agent.graph.graph import GraphOutput, GraphPipeline
 from app.agent.rag_pipeline import PipelineOutput, RagPipeline
 from app.integrations.whatsapp_client import WhatsAppClient
 
@@ -35,6 +39,11 @@ Channel = Literal["whatsapp", "playground"]
 DecisionKind = Literal[
     "answered", "low_confidence", "no_match", "blocked", "error"
 ]
+
+_AMBIGUOUS_PRODUCT_TEMPLATE = (
+    "Para responder bien necesito que me confirmes el producto. "
+    "Estoy entre: {options}. ¿Cual te interesa?"
+)
 
 
 class PlaygroundRtcForbiddenError(Exception):
@@ -71,9 +80,10 @@ class AgentOrchestrator:
         rtc_repository: RtcRepository,
         conversation_repository: ConversationRepository,
         system_prompt_repository: SystemPromptRepository,
-        pipeline: RagPipeline,
+        pipeline: "RagPipeline | GraphPipeline",
         whatsapp_client: WhatsAppClient,
         similarity_threshold: float,
+        conversation_state_repository: ConversationStateRepository | None = None,
     ) -> None:
         self._rtc = rtc_repository
         self._conversations = conversation_repository
@@ -81,6 +91,8 @@ class AgentOrchestrator:
         self._pipeline = pipeline
         self._whatsapp = whatsapp_client
         self._threshold = similarity_threshold
+        self._state_repo = conversation_state_repository
+        self._use_graph = isinstance(pipeline, GraphPipeline)
 
     async def handle_incoming_message(
         self,
@@ -167,11 +179,29 @@ class AgentOrchestrator:
         )
         prompt_version = active_prompt.version if active_prompt else None
 
-        output: PipelineOutput = await self._pipeline.run(
-            query=text_body,
-            allowed_countries=rtc.countries,
-            system_prompt=system_prompt,
-        )
+        if self._use_graph:
+            inherited_product_id = await self._read_inherited_product(
+                conversation_id
+            )
+            graph_output: GraphOutput = await self._pipeline.run(  # type: ignore[union-attr]
+                query=text_body,
+                allowed_countries=rtc.countries,
+                system_prompt=system_prompt,
+                conversation_id=conversation_id,
+                inherited_product_id=inherited_product_id,
+            )
+            adapter = _GraphPipelineAdapter(graph_output)
+            output: PipelineOutput = adapter.to_pipeline_output()
+            ambiguous = list(graph_output.ambiguous_candidates)
+            graph_trace = [t.model_dump(mode="json") for t in graph_output.graph_trace]
+        else:
+            output = await self._pipeline.run(  # type: ignore[union-attr]
+                query=text_body,
+                allowed_countries=rtc.countries,
+                system_prompt=system_prompt,
+            )
+            ambiguous = []
+            graph_trace = []
 
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
@@ -180,6 +210,7 @@ class AgentOrchestrator:
             user_message_id=user_message_id,
             output=output,
             text_body=text_body,
+            ambiguous_candidates=ambiguous,
         )
 
         assistant_message_id = await self._conversations.insert_message(
@@ -204,6 +235,7 @@ class AgentOrchestrator:
             ],
             top_similarity=output.top_similarity or None,
             system_prompt_version=prompt_version,
+            graph_trace=graph_trace,
         )
 
         if deliver_whatsapp:
@@ -220,12 +252,19 @@ class AgentOrchestrator:
             ticket_id=ticket_id,
             conversation_id=str(conversation_id),
             rtc_user_id=str(rtc.id),
+            pipeline="graph" if self._use_graph else "lcel",
         )
         return HandleResult(
             decision=decision,
             reply_text=reply_text,
             ticket_id=ticket_id,
         )
+
+    async def _read_inherited_product(self, conversation_id: UUID) -> UUID | None:
+        if self._state_repo is None:
+            return None
+        record = await self._state_repo.get(conversation_id)
+        return record.current_product_id if record else None
 
     async def _decide(
         self,
@@ -234,7 +273,19 @@ class AgentOrchestrator:
         user_message_id,
         output: PipelineOutput,
         text_body: str,
+        ambiguous_candidates: list[Any] | None = None,
     ) -> tuple[DecisionKind, str, RagAnswer | None, str | None]:
+        # Ambiguedad de producto: respondemos pidiendo aclaracion sin abrir
+        # ticket (no es un fallo, es una falta de informacion del usuario).
+        if ambiguous_candidates:
+            names = " / ".join(c.product_name for c in ambiguous_candidates[:3])
+            return (
+                "low_confidence",
+                _AMBIGUOUS_PRODUCT_TEMPLATE.format(options=names),
+                None,
+                None,
+            )
+
         if not output.retrieved or output.top_similarity < self._threshold:
             ticket_id = await self._conversations.insert_ticket(
                 conversation_id=conversation_id,
@@ -292,3 +343,70 @@ def _hash_phone(phone: str) -> str:
     import hashlib
 
     return hashlib.sha256(phone.encode("utf-8")).hexdigest()[:12]
+
+
+@dataclass(slots=True)
+class _GraphPipelineAdapter:
+    """Adapta `GraphOutput` -> `PipelineOutput` para el resto del orchestrator.
+
+    El grafo y el pipeline LCEL devuelven estructuras distintas; el adapter
+    asegura que `_decide`/persistencia siguen recibiendo un objeto unico.
+    """
+
+    graph_output: GraphOutput
+
+    def to_pipeline_output(self) -> PipelineOutput:
+        from biomont_common.schemas.rag import RetrievedChunk
+
+        retrieved: list[RetrievedChunk] = [
+            RetrievedChunk(
+                chunk_id=hit.chunk_id,
+                document_id=hit.document_id,
+                document_title=hit.document_title,
+                country_iso=hit.country_iso,
+                chunk_index=hit.chunk_index,
+                content=hit.content,
+                similarity=hit.final_score,
+            )
+            for hit in self.graph_output.retrieved
+        ]
+
+        if (
+            self.graph_output.faq_direct_answer is not None
+            and self.graph_output.faq_hits
+        ):
+            top_faq = self.graph_output.faq_hits[0]
+            faq_citations = [
+                Citation(
+                    document_id=top_faq.document_id,
+                    document_title="FAQ",
+                    similarity=top_faq.final_score,
+                )
+            ]
+            answer = RagAnswer(
+                answer=self.graph_output.faq_direct_answer,
+                citations=faq_citations,
+            )
+            return PipelineOutput(
+                retrieved=retrieved,
+                top_similarity=top_faq.final_score,
+                answer=answer,
+                raw_answer_text=answer.answer,
+                error=None,
+            )
+
+        answer = None
+        if self.graph_output.answer_text and self.graph_output.citations:
+            answer = RagAnswer(
+                answer=self.graph_output.answer_text,
+                citations=[
+                    Citation(**c) for c in self.graph_output.citations
+                ],
+            )
+        return PipelineOutput(
+            retrieved=retrieved,
+            top_similarity=self.graph_output.top_similarity,
+            answer=answer,
+            raw_answer_text=answer.answer if answer else None,
+            error=self.graph_output.error,
+        )
