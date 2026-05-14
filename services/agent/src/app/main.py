@@ -117,6 +117,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         pipeline=pipeline,
         whatsapp_client=whatsapp_client,
         similarity_threshold=agent_settings.similarity_threshold,
+        rag_vector_weight=(
+            rag_settings.vector_weight if rag_settings.agent_use_graph else None
+        ),
     )
     app.state.orchestrator = orchestrator
     logger.info("startup_complete", action="startup")

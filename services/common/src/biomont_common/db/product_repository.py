@@ -23,6 +23,63 @@ from biomont_common.schemas.products import (
 
 _WS_RE = re.compile(r"\s+")
 
+_ALIAS_TOKEN_STOPWORDS = frozenset(
+    {
+        "para",
+        "por",
+        "con",
+        "del",
+        "las",
+        "los",
+        "una",
+        "unos",
+        "este",
+        "esta",
+        "esto",
+        "cual",
+        "cuales",
+        "cuando",
+        "donde",
+        "como",
+        "sobre",
+        "desde",
+        "hasta",
+        "cada",
+        "muy",
+        "mas",
+        "son",
+        "que",
+        "sus",
+        "han",
+        "puede",
+        "pueden",
+        "dime",
+        "dame",
+        "decime",
+        "cuanto",
+        "cuanta",
+        "informacion",
+    }
+)
+
+
+def significant_alias_tokens(normalized_query: str) -> list[str]:
+    """Palabras fuertes de la consulta para cruzar con `product_aliases`.
+
+    Ignora articulos/particulas cortos; permite matchear "protego" dentro de
+    frases largas donde el trigram alias-vs-oracion falla por ruido.
+    """
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in normalized_query.split():
+        if len(raw) < 4 or raw in _ALIAS_TOKEN_STOPWORDS:
+            continue
+        if raw not in seen:
+            seen.add(raw)
+            out.append(raw)
+    return out[:16]
+
 
 def normalize_text(value: str) -> str:
     """Normaliza al mismo dominio que `immutable_unaccent_lower` SQL.
@@ -168,19 +225,19 @@ class ProductRepository:
         allowed_countries: Sequence[str] | None = None,
         limit: int = 5,
     ) -> list[ProductCandidate]:
-        """Resuelve candidatos por (1) exacto sobre normalized_alias, (2) trigram.
+        """Resuelve candidatos usando alias + texto completo + tokens de la consulta.
 
-        El query SQL combina ambas estrategias en un solo statement:
-        - Match exacto recibe similarity=1.0.
-        - El resto se ordena por `similarity()` (pg_trgm) decreciente.
-
-        `allowed_countries`: ISO2 de paises del RTC. Productos con
-        `country_iso=NULL` se consideran globales y siempre matchean.
+        Combina trigram contra la consulta normalizada y contra tokens
+        significativos (>3 grafemas): asi menciones aisladas de producto
+        sobreviven a frases libres tipo "Cuales son los efectos adversos del
+        protego".
         """
 
         normalized = normalize_text(query_text)
         if not normalized:
             return []
+
+        alias_tokens = significant_alias_tokens(normalized)
 
         countries = (
             list({c.upper() for c in allowed_countries if c})
@@ -194,17 +251,73 @@ class ProductRepository:
                     p.id   AS product_id,
                     p.name AS product_name,
                     a.alias AS alias_matched,
-                    CASE
-                        WHEN a.normalized_alias = $1 THEN 1.0
-                        ELSE similarity(a.normalized_alias, $1)
-                    END AS sim,
+                    GREATEST(
+                        CASE
+                            WHEN LENGTH($1) > 0 AND a.normalized_alias = $1
+                            THEN 1.0
+                            ELSE 0.0
+                        END,
+                        CASE
+                            WHEN LENGTH($1) > 0
+                                 AND (
+                                     a.normalized_alias = $1
+                                     OR a.normalized_alias % $1
+                                 )
+                            THEN similarity(a.normalized_alias, $1)
+                            ELSE 0.0
+                        END,
+                        COALESCE(
+                            (
+                                SELECT MAX(
+                                    CASE
+                                        WHEN LENGTH(tok) >= 3
+                                             AND a.normalized_alias = tok
+                                        THEN 1.0
+                                        WHEN LENGTH(tok) >= 4
+                                             AND (
+                                                 a.normalized_alias % tok
+                                             )
+                                        THEN similarity(
+                                            a.normalized_alias,
+                                            tok
+                                        )
+                                        ELSE 0.0
+                                    END
+                                )
+                                FROM unnest(COALESCE($3::text[], ARRAY[]::text[]))
+                                    AS ux(tok)
+                                WHERE LENGTH(tok) >= 3
+                            ),
+                            0.0
+                        )
+                    ) AS sim,
                     p.country_iso
                 FROM public.products p
                 JOIN public.product_aliases a ON a.product_id = p.id
                 WHERE
                     (
-                        a.normalized_alias = $1
-                        OR a.normalized_alias % $1
+                        (
+                            LENGTH($1) > 0
+                            AND (
+                                a.normalized_alias = $1
+                                OR a.normalized_alias % $1
+                            )
+                        )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM unnest(COALESCE($3::text[], ARRAY[]::text[]))
+                                AS ux(tok)
+                            WHERE LENGTH(tok) >= 3
+                              AND (
+                                  a.normalized_alias = tok
+                                  OR (
+                                      LENGTH(tok) >= 4
+                                      AND (
+                                          a.normalized_alias % tok
+                                      )
+                                  )
+                              )
+                        )
                     )
                     AND (
                         $2::char(2)[] IS NULL
@@ -214,18 +327,24 @@ class ProductRepository:
             ),
             best AS (
                 SELECT DISTINCT ON (product_id)
-                    product_id, product_name, alias_matched, sim, country_iso
+                    product_id,
+                    product_name,
+                    alias_matched,
+                    sim,
+                    country_iso
                 FROM ranked
                 ORDER BY product_id, sim DESC
             )
             SELECT product_id, product_name, alias_matched, sim
             FROM best
             ORDER BY sim DESC
-            LIMIT $3
+            LIMIT $4
         """
 
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch(sql, normalized, countries, limit)
+            rows = await conn.fetch(
+                sql, normalized, countries, alias_tokens, limit
+            )
 
         return [
             ProductCandidate(

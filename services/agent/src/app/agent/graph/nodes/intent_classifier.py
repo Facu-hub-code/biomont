@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
+from biomont_common.db.product_repository import normalize_text
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -32,13 +33,82 @@ Etiquetas posibles (devolve EXACTAMENTE una):
 - dosage_question: pregunta sobre dosis o cuanto administrar.
 - clinical_protocol: pregunta sobre protocolos terapeuticos / tratamiento clinico.
 - comparison_with_competitor: comparacion con otro producto (Bravecto, Atrevia, etc).
-- safety_question: gestacion, lactancia, edad, MDR1, hepatopatas.
-- faq: preguntas frecuentes recurrentes (uso comun, sabor, presentaciones).
+- safety_question: efectos adversos, reacciones adversas/eventos adversos,
+  tolerancia, contraindicaciones, toxicidad, sobredosis, interacciones,
+  seguridad uso en hepaticos/renales y edades minimas, collies/blancos/MDR1 cuando
+  el foco sea riesgo clinico para el paciente.
+
+  Si hay mezcla seguridad-vs-catalogo pero el contenido centrado esta en seguridad/
+  efectos/indicaciones de vigilancia veterinaria usa esta etiqueta sobre FAQ.
+
+- faq: preguntas frecuentes de catalogo rutinarias (presentaciones, modo de uso,
+  sabores empaque uso comun) donde el foco principal no sea riesgo grave.
+
+  IMPORTANTE EXCEPCION: "Puede usarse en gestacion?" (o lactancia muy similar tipo
+  "en la prenez") debe ir SIEMPRE como faq porque se resuelve primero desde el FAQ
+  del balotario.
+
 - chitchat: saludo o conversacion casual.
 - out_of_scope: fuera del dominio (politica, recetas humanas, etc).
 
 Devolve JSON valido siguiendo el schema dado, sin texto extra.
 """
+
+
+def lexical_safety_signals_present(normalized_query: str) -> bool:
+    """Señales baratas cuando el modelo etiqueta FAQ pero el contenido es riesgo.
+
+    No marca gestacion/embarazo-preñez solas para no romper corto-circuito FAQ.
+    """
+
+    q = normalized_query.casefold()
+
+    if "advers" in q and (
+        "efect" in q or "reacci" in q or "event" in q
+    ):
+        return True
+    if "contrai" in q:
+        return True
+    if "toxic" in q or "intoxic" in q or "sobredosi" in q:
+        return True
+    if "mdr1" in q or "multidrog" in q:
+        return True
+    return any(w in q for w in ("collie", "colie", "pastor ingles"))
+
+
+_GESTATION_FAQ_RELIEF_HINTS = ("gestac", "embarazo", "prenez", "lactanci")
+
+
+def lexical_gestation_faq_intent(normalized_query: str) -> bool:
+    """True si huele a FAQ clasico de uso en reproduccion (balotario)."""
+
+    q = normalized_query.casefold()
+    return any(h in q for h in _GESTATION_FAQ_RELIEF_HINTS)
+
+
+def apply_intent_lexical_calibration(
+    classification: IntentClassification, raw_query: str
+) -> IntentClassification:
+    """Corrige errores conocidos despues del LLM antes de rutear retrieval."""
+
+    nq = normalize_text(raw_query)
+
+    adjusted = classification
+    if lexical_gestation_faq_intent(nq):
+        if adjusted.intent in (Intent.safety_question, Intent.dosage_question):
+            adjusted = IntentClassification(
+                intent=Intent.faq, confidence=min(adjusted.confidence, 0.95)
+            )
+    elif (
+        adjusted.intent == Intent.faq
+        and lexical_safety_signals_present(nq)
+    ):
+        adjusted = IntentClassification(
+            intent=Intent.safety_question,
+            confidence=max(adjusted.confidence, 0.88),
+        )
+
+    return adjusted
 
 
 @dataclass
@@ -56,10 +126,11 @@ class IntentClassifierNode:
         with trace_node(updates, node="IntentClassifier") as result:
             cached = self._cache.get(cache_key)
             if cached is not None:
+                calibrated = apply_intent_lexical_calibration(cached, query)
                 result["outcome"] = "cache_hit"
-                result["payload"] = {"intent": cached.intent.value}
-                updates["intent"] = cached.intent
-                updates["intent_confidence"] = cached.confidence
+                result["payload"] = {"intent": calibrated.intent.value}
+                updates["intent"] = calibrated.intent
+                updates["intent_confidence"] = calibrated.confidence
                 return updates
 
             try:
@@ -83,19 +154,20 @@ class IntentClassifierNode:
                 updates["intent_confidence"] = 0.0
                 return updates
 
-            normalized = _coerce_response(response)
-            self._cache[cache_key] = normalized
+            coerced = _coerce_response(response)
+            calibrated = apply_intent_lexical_calibration(coerced, query)
+            self._cache[cache_key] = calibrated
             result["outcome"] = "classified"
-            result["payload"] = {"intent": normalized.intent.value}
-            updates["intent"] = normalized.intent
-            updates["intent_confidence"] = normalized.confidence
+            result["payload"] = {"intent": calibrated.intent.value}
+            updates["intent"] = calibrated.intent
+            updates["intent_confidence"] = calibrated.confidence
         return updates
 
 
 def _coerce_response(response: object) -> IntentClassification:
     """Acepta dict / IntentClassification / objeto con .intent (duck typing).
 
-    Hace al nodo tolerante a fakes de tests que solo proveen `.intent`.
+    Hace el nodo tolerante a fakes de tests que solo proveen `.intent`.
     """
 
     if isinstance(response, IntentClassification):

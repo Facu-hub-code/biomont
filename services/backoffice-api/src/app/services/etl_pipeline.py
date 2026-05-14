@@ -48,6 +48,8 @@ from biomont_common.integrations.text_splitter import (
 from biomont_common.logging import get_logger
 from biomont_common.schemas.knowledge import DocumentKind
 
+from biomont_common.settings import get_rag_settings
+
 from app.db.document_repository import (
     DocumentRepository,
     SectionInput,
@@ -93,7 +95,14 @@ class DocumentIngestService:
         self._converter = converter
         self._embeddings = embeddings
         self._chunker = chunker or MarkdownChunker()
-        self._structured_chunker = structured_chunker or StructuredMarkdownChunker()
+        if structured_chunker is None:
+            r = get_rag_settings()
+            self._structured_chunker = StructuredMarkdownChunker(
+                chunk_tokens=r.knowledge_chunk_tokens,
+                overlap_tokens=r.knowledge_chunk_overlap,
+            )
+        else:
+            self._structured_chunker = structured_chunker
         self._faq_repository = faq_repository
         self._faq_extractor = faq_extractor
         self._product_repository = product_repository

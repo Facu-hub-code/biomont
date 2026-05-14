@@ -14,6 +14,10 @@ class Intent(str, Enum):
 
     Mantener sincronizada con prompts de IntentClassifier y con la
     columna `last_intent` de `conversation_state`.
+
+    `safety_question` incluye farmacovigilancia (efectos adversos, toxicidad,
+    contraindicaciones) y riesgos poblacionales cuando el foco no es solo FAQ
+    de catalogo.
     """
 
     dosage_question = "dosage_question"

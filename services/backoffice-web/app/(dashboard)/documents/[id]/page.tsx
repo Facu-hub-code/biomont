@@ -118,9 +118,12 @@ export default async function DocumentDetailPage({
                   kind: {section.section_kind ?? "-"} · paginas: {section.page_start ?? "-"} -{" "}
                   {section.page_end ?? "-"}
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">
-                  {section.raw_text?.slice(0, 1200) ?? "Sin texto."}
-                </p>
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-slate-400">Texto completo guardado en BD</p>
+                  <div className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm text-slate-700">
+                    {section.raw_text ?? "Sin texto."}
+                  </div>
+                </div>
               </details>
             ))}
           </div>
@@ -158,8 +161,10 @@ export default async function DocumentDetailPage({
                     {chunk.contains_dose ? "dosis" : "-"}
                   </td>
                   <td>{chunk.token_count}</td>
-                  <td className="max-w-xl whitespace-pre-wrap text-xs">
-                    {chunk.content.slice(0, 300)}
+                  <td className="max-w-xl">
+                    <div className="max-h-48 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-800">
+                      {chunk.content}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -203,7 +208,11 @@ export default async function DocumentDetailPage({
                 <tr key={chunk.id}>
                   <td>{chunk.chunk_index}</td>
                   <td>{chunk.token_count}</td>
-                  <td className="max-w-xl whitespace-pre-wrap text-xs">{chunk.content.slice(0, 300)}</td>
+                  <td className="max-w-xl">
+                    <div className="max-h-48 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-800">
+                      {chunk.content}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

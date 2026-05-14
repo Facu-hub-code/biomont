@@ -93,6 +93,12 @@ class RagSettings(BaseSettings):
     # LCEL viejo contra document_chunks (camino de rollback).
     agent_use_graph: bool = Field(True, alias="AGENT_USE_GRAPH")
 
+    # Tamaño de fragmentos `knowledge_chunks` (StructuredMarkdownChunker).
+    # Subir mejora contexto por chunk; bajar acota costo de embedding / ruido BM25.
+    # Requiere reingesta para aplicar a documentos ya cargados.
+    knowledge_chunk_tokens: int = Field(1000, alias="RAG_KNOWLEDGE_CHUNK_TOKENS")
+    knowledge_chunk_overlap: int = Field(120, alias="RAG_KNOWLEDGE_CHUNK_OVERLAP")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

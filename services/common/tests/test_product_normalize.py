@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import pytest
 
-from biomont_common.db.product_repository import normalize_text
+from biomont_common.db.product_repository import (
+    normalize_text,
+    significant_alias_tokens,
+)
 
 
 @pytest.mark.parametrize(
@@ -24,3 +27,19 @@ from biomont_common.db.product_repository import normalize_text
 )
 def test_normalize_text_cases(raw: str, expected: str) -> None:
     assert normalize_text(raw) == expected
+
+
+def test_significant_alias_tokens_extracts_product_mentions() -> None:
+    q = normalize_text("Cuales son los efectos adversos del protego")
+    tokens = significant_alias_tokens(q)
+    assert "protego" in tokens
+    assert "efectos" in tokens
+
+
+def test_significant_alias_tokens_drops_short_and_stopwords() -> None:
+    tokens = significant_alias_tokens(
+        normalize_text("Cual es el protocolo")
+    )
+    assert "protocolo" in tokens
+    assert "cual" not in tokens
+    assert "el" not in tokens

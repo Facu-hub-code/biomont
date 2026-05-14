@@ -8,7 +8,10 @@ import pytest
 
 from biomont_common.schemas.rag import RagAnswer, RetrievedChunk
 
-from app.agent.orchestrator import AgentOrchestrator
+from app.agent.orchestrator import (
+    AgentOrchestrator,
+    effective_retrieval_similarity_threshold,
+)
 from app.agent.rag_pipeline import PipelineOutput
 
 from tests.conftest import (
@@ -49,9 +52,29 @@ def _build_orchestrator(*, pipeline_output: PipelineOutput, rtc_user: FakeRtcUse
     )
 
 
+def test_effective_similarity_threshold_adjusts_for_graph_fusion_cap() -> None:
+    assert effective_retrieval_similarity_threshold(
+        configured_threshold=0.75,
+        pipeline_uses_graph=True,
+        rag_vector_weight=0.7,
+    ) == pytest.approx(0.7)
+    assert effective_retrieval_similarity_threshold(
+        configured_threshold=0.55,
+        pipeline_uses_graph=True,
+        rag_vector_weight=0.7,
+    ) == pytest.approx(0.55)
+    assert effective_retrieval_similarity_threshold(
+        configured_threshold=0.75,
+        pipeline_uses_graph=False,
+        rag_vector_weight=0.7,
+    ) == pytest.approx(0.75)
+
+
 @pytest.mark.asyncio
 async def test_orchestrator_blocks_unauthorized_phone() -> None:
-    output = PipelineOutput(retrieved=[], top_similarity=0.0, answer=None, raw_answer_text=None)
+    output = PipelineOutput(
+        retrieved=[], top_similarity=0.0, answer=None, raw_answer_text=None
+    )
     orchestrator, conv = _build_orchestrator(pipeline_output=output, rtc_user=None)
 
     result = await orchestrator.handle_incoming_message(

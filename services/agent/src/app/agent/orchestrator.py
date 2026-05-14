@@ -62,10 +62,38 @@ _NOT_AUTHORIZED_MESSAGE = (
     "contacta al equipo de Biomont."
 )
 
+def effective_retrieval_similarity_threshold(
+    *,
+    configured_threshold: float,
+    pipeline_uses_graph: bool,
+    rag_vector_weight: float | None,
+) -> float:
+    """Umbral efectivo vs `PipelineOutput.top_similarity`.
+
+    En el grafo hibrido, `top_similarity` es el score fusion vec+BM25 min-max dentro
+    de los candidatos. Si BM25 no rankea ningun chunk del conjunto seleccionado
+    por embedding, cada fila llega solo con score vector normalizado y la fusion
+    queda capped aprox en `rag_vector_weight` (ej. 0.7 con RAG_VECTOR_WEIGHT=0.7).
+    Comparar tal valor contra AGENT_SIMILARITY_THRESHOLD clasico(~coseno 0...1 en
+    0.75+) produce falsos negativos: hay contexto recuperado pero se dispara ticket.
+    Por eso cuando el grafo esta activo ajustamos el umbral efectivo como
+    `min(configurado, vector_weight)` (si viene `rag_vector_weight`).
+    """
+
+    if (
+        pipeline_uses_graph
+        and rag_vector_weight is not None
+        and rag_vector_weight > 0
+    ):
+        return min(float(configured_threshold), float(rag_vector_weight))
+    return float(configured_threshold)
+
+
 _NO_INFO_MESSAGE_TEMPLATE = (
     "No tengo esa informacion en mis documentos validados.\n"
     "Cree el ticket #{ticket_id} para que el equipo lo revise."
 )
+
 
 _LOW_CONFIDENCE_MESSAGE = (
     "No tengo informacion con suficiente confianza. Cree un ticket para "
@@ -84,6 +112,7 @@ class AgentOrchestrator:
         whatsapp_client: WhatsAppClient,
         similarity_threshold: float,
         conversation_state_repository: ConversationStateRepository | None = None,
+        rag_vector_weight: float | None = None,
     ) -> None:
         self._rtc = rtc_repository
         self._conversations = conversation_repository
@@ -93,6 +122,7 @@ class AgentOrchestrator:
         self._threshold = similarity_threshold
         self._state_repo = conversation_state_repository
         self._use_graph = isinstance(pipeline, GraphPipeline)
+        self._rag_vector_weight = rag_vector_weight
 
     async def handle_incoming_message(
         self,
@@ -286,7 +316,20 @@ class AgentOrchestrator:
                 None,
             )
 
-        if not output.retrieved or output.top_similarity < self._threshold:
+        gate = effective_retrieval_similarity_threshold(
+            configured_threshold=self._threshold,
+            pipeline_uses_graph=self._use_graph,
+            rag_vector_weight=self._rag_vector_weight,
+        )
+
+        # Epsilon: mismatches float32->float64 al serializar scores de PG.
+        epsilon = 1e-5
+        weak_retrieval = (
+            not output.retrieved
+            or output.top_similarity < gate - epsilon
+        )
+
+        if weak_retrieval:
             ticket_id = await self._conversations.insert_ticket(
                 conversation_id=conversation_id,
                 message_id=user_message_id,
@@ -294,6 +337,7 @@ class AgentOrchestrator:
                 summary=text_body[:200],
                 notes=(
                     f"top_similarity={output.top_similarity:.3f} "
+                    f"gate={gate:.3f} graph={self._use_graph} "
                     f"chunks={len(output.retrieved)}"
                 ),
             )

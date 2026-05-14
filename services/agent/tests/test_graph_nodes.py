@@ -10,12 +10,15 @@ import uuid
 
 import pytest
 
-from biomont_common.schemas.agent_graph import Intent
+from biomont_common.schemas.agent_graph import Intent, IntentClassification
 from biomont_common.schemas.knowledge import DocumentKind
 from biomont_common.schemas.products import ProductCandidate
 
 from app.agent.graph.nodes.faq_retriever import FaqRetrieverNode
 from app.agent.graph.nodes.hybrid_retriever import HybridRetrieverNode
+from app.agent.graph.nodes.intent_classifier import (
+    apply_intent_lexical_calibration,
+)
 from app.agent.graph.nodes.meta_filter import MetaFilterNode
 from app.agent.graph.nodes.product_resolver import ProductResolverNode
 from app.agent.graph.nodes.state_updater import StateUpdaterNode
@@ -133,6 +136,14 @@ async def test_meta_filter_maps_intent_to_kinds():
             Intent.dosage_question,
             [DocumentKind.bitacora, DocumentKind.ficha_tecnica],
         ),
+        (
+            Intent.safety_question,
+            [
+                DocumentKind.ficha_tecnica,
+                DocumentKind.bitacora,
+                DocumentKind.balotario,
+            ],
+        ),
         (Intent.chitchat, None),
     ]
     for intent, expected in cases:
@@ -201,3 +212,20 @@ async def test_state_updater_persists_state():
     assert conv in repo.state_by_conv
     assert repo.state_by_conv[conv]["current_product_id"] == prod
     assert repo.state_by_conv[conv]["last_intent"] == "dosage_question"
+
+
+def test_intent_calibration_moves_adversos_from_faq_to_safety() -> None:
+    baseline = IntentClassification(intent=Intent.faq, confidence=0.9)
+    calibrated = apply_intent_lexical_calibration(
+        baseline, "Cuales son los efectos adversos del protego"
+    )
+    assert calibrated.intent == Intent.safety_question
+    assert calibrated.confidence >= 0.88
+
+
+def test_intent_calibration_keeps_gestacion_in_faq() -> None:
+    baseline = IntentClassification(intent=Intent.safety_question, confidence=1.0)
+    calibrated = apply_intent_lexical_calibration(
+        baseline, "Puede usarse en gestacion?"
+    )
+    assert calibrated.intent == Intent.faq

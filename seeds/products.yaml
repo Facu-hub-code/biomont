@@ -1,36 +1,36 @@
 # Productos veterinarios Biomont para el bootstrap (spec 003).
 #
-# Editar este archivo y correr `python scripts/bootstrap_products.py`
-# (idempotente). El script:
-#   1) Inserta o actualiza `products` por (lower(name), country_iso).
-#   2) Inserta `product_aliases` (incluyendo `name` como alias canonico).
-#   3) Asocia `documents.product_id` cuando matchea por nombre.
+# Los nombres (`name`) deben coincidir con lo cargado en `public.products`.
+# Ejecutar: `DATABASE_URL=... python scripts/bootstrap_products.py`
 #
-# Campos:
-#   name           (obligatorio)
-#   brand          (default: 'Biomont')
-#   duration_type  (libre, ej: '1M', '3M')
-#   description    (texto libre)
-#   country_iso    (ISO2, opcional; sin pais => producto global)
-#   aliases        (lista de strings; cada uno se inserta como alias)
+# Si falla el clasificador o el usuario escribe variantes (“protego” vs
+# “Proteggo”), los aliases siguen ayudando al ProductResolver (trigrams).
 
 products:
-  - name: Proteggo M
-    duration_type: 1M
-    description: Antiparasitario externo de 1 mes basado en isoxazolinas.
-    aliases:
-      - proteggo
-      - proteggo mensual
-      - el de 1 mes
-      - el rojo
-      - el morado
-  - name: Proteggo 3M
+  - name: Protego 3M
     duration_type: 3M
-    description: Antiparasitario externo de 3 meses basado en isoxazolinas.
+    description: Antiparasitario externo de ~3 meses (isoxazolinas).
     aliases:
+      - protego 3 meses
+      - protego 3m
+      - protegg 3 meses
+      - protegg 3m
       - proteggo 3 meses
-      - proteggo trimestral
+      - proteggo 3m
+      - protego trimestral
+      - trimestral
       - el de 3 meses
-      - el trimestral
       - el verde
       - el amarillo
+      # Menciones coloquiales sin duración ("el protego")
+      - protego
+      - protegg
+      - proteggo
+
+  - name: Serentis
+    duration_type: null
+    description: Referencia veterinaria segun catalogo Biomont.
+    aliases:
+      - serenis
+      - cerentis
+      - serum
