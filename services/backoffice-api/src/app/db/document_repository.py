@@ -54,6 +54,63 @@ class SectionInput:
     raw_text: str | None = None
 
 
+@dataclass(slots=True)
+class DocumentSectionRow:
+    id: UUID
+    document_id: UUID
+    section_index: int
+    parent_section_id: UUID | None
+    section_number: str | None
+    section_title: str | None
+    section_kind: str | None
+    page_start: int | None
+    page_end: int | None
+    raw_text: str | None
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class DocumentKnowledgeChunkRow:
+    id: UUID
+    document_id: UUID
+    section_id: UUID | None
+    product_id: UUID | None
+    kind: str
+    chunk_index: int
+    section_type: str | None
+    subsection_type: str | None
+    topic: str | None
+    content: str
+    token_count: int
+    contains_table: bool
+    contains_dose: bool
+    species: list[str]
+    metadata: dict[str, Any]
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class DocumentLegacyChunkRow:
+    id: UUID
+    document_id: UUID
+    chunk_index: int
+    content: str
+    token_count: int
+    metadata: dict[str, Any]
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class DocumentFaqEntryRow:
+    id: UUID
+    product_id: UUID | None
+    document_id: UUID
+    question: str
+    answer: str
+    source_page: int | None
+    created_at: datetime
+
+
 def compute_sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
@@ -111,6 +168,113 @@ class DocumentRepository:
                 document_id,
             )
         return self._row_to_document(row) if row else None
+
+    async def list_document_sections(
+        self,
+        document_id: UUID,
+        *,
+        page: int,
+        page_size: int,
+    ) -> tuple[int, list[DocumentSectionRow]]:
+        offset = (page - 1) * page_size
+        count_sql = """
+            SELECT count(*)
+            FROM public.document_sections
+            WHERE document_id = $1
+        """
+        list_sql = """
+            SELECT
+                id, document_id, section_index, parent_section_id,
+                section_number, section_title, section_kind, page_start, page_end,
+                raw_text, created_at
+            FROM public.document_sections
+            WHERE document_id = $1
+            ORDER BY section_index ASC
+            LIMIT $2 OFFSET $3
+        """
+        async with self._pool.acquire() as conn:
+            total = int(await conn.fetchval(count_sql, document_id) or 0)
+            rows = await conn.fetch(list_sql, document_id, page_size, offset)
+        return total, [self._row_to_section_row(row) for row in rows]
+
+    async def list_document_knowledge_chunks(
+        self,
+        document_id: UUID,
+        *,
+        page: int,
+        page_size: int,
+    ) -> tuple[int, list[DocumentKnowledgeChunkRow]]:
+        offset = (page - 1) * page_size
+        count_sql = """
+            SELECT count(*)
+            FROM public.knowledge_chunks
+            WHERE document_id = $1
+        """
+        list_sql = """
+            SELECT
+                id, document_id, section_id, product_id,
+                kind::text AS kind, chunk_index, section_type, subsection_type, topic,
+                content, token_count, contains_table, contains_dose,
+                species, metadata, created_at
+            FROM public.knowledge_chunks
+            WHERE document_id = $1
+            ORDER BY chunk_index ASC
+            LIMIT $2 OFFSET $3
+        """
+        async with self._pool.acquire() as conn:
+            total = int(await conn.fetchval(count_sql, document_id) or 0)
+            rows = await conn.fetch(list_sql, document_id, page_size, offset)
+        return total, [self._row_to_knowledge_chunk_row(row) for row in rows]
+
+    async def list_document_legacy_chunks(
+        self,
+        document_id: UUID,
+        *,
+        page: int,
+        page_size: int,
+    ) -> tuple[int, list[DocumentLegacyChunkRow]]:
+        offset = (page - 1) * page_size
+        count_sql = """
+            SELECT count(*)
+            FROM public.document_chunks
+            WHERE document_id = $1
+        """
+        list_sql = """
+            SELECT id, document_id, chunk_index, content, token_count, metadata, created_at
+            FROM public.document_chunks
+            WHERE document_id = $1
+            ORDER BY chunk_index ASC
+            LIMIT $2 OFFSET $3
+        """
+        async with self._pool.acquire() as conn:
+            total = int(await conn.fetchval(count_sql, document_id) or 0)
+            rows = await conn.fetch(list_sql, document_id, page_size, offset)
+        return total, [self._row_to_legacy_chunk_row(row) for row in rows]
+
+    async def list_document_faq_entries(
+        self,
+        document_id: UUID,
+        *,
+        page: int,
+        page_size: int,
+    ) -> tuple[int, list[DocumentFaqEntryRow]]:
+        offset = (page - 1) * page_size
+        count_sql = """
+            SELECT count(*)
+            FROM public.faq_entries
+            WHERE document_id = $1
+        """
+        list_sql = """
+            SELECT id, product_id, document_id, question, answer, source_page, created_at
+            FROM public.faq_entries
+            WHERE document_id = $1
+            ORDER BY created_at ASC
+            LIMIT $2 OFFSET $3
+        """
+        async with self._pool.acquire() as conn:
+            total = int(await conn.fetchval(count_sql, document_id) or 0)
+            rows = await conn.fetch(list_sql, document_id, page_size, offset)
+        return total, [self._row_to_faq_row(row) for row in rows]
 
     async def find_by_content_sha256(self, sha: str) -> DocumentRow | None:
         async with self._pool.acquire() as conn:
@@ -330,4 +494,79 @@ class DocumentRepository:
             kind=str(data.get("kind") or "bitacora"),
             product_id=data.get("product_id"),
             chunk_count=int(data.get("chunk_count") or 0),
+        )
+
+    @staticmethod
+    def _parse_json(value: Any) -> dict[str, Any]:
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return {}
+            parsed = json.loads(stripped)
+            return parsed if isinstance(parsed, dict) else {}
+        return {}
+
+    @staticmethod
+    def _row_to_section_row(row: Any) -> DocumentSectionRow:
+        return DocumentSectionRow(
+            id=row["id"],
+            document_id=row["document_id"],
+            section_index=row["section_index"],
+            parent_section_id=row["parent_section_id"],
+            section_number=row["section_number"],
+            section_title=row["section_title"],
+            section_kind=row["section_kind"],
+            page_start=row["page_start"],
+            page_end=row["page_end"],
+            raw_text=row["raw_text"],
+            created_at=row["created_at"],
+        )
+
+    @classmethod
+    def _row_to_knowledge_chunk_row(cls, row: Any) -> DocumentKnowledgeChunkRow:
+        return DocumentKnowledgeChunkRow(
+            id=row["id"],
+            document_id=row["document_id"],
+            section_id=row["section_id"],
+            product_id=row["product_id"],
+            kind=row["kind"],
+            chunk_index=row["chunk_index"],
+            section_type=row["section_type"],
+            subsection_type=row["subsection_type"],
+            topic=row["topic"],
+            content=row["content"],
+            token_count=row["token_count"],
+            contains_table=bool(row["contains_table"]),
+            contains_dose=bool(row["contains_dose"]),
+            species=list(row["species"] or []),
+            metadata=cls._parse_json(row["metadata"]),
+            created_at=row["created_at"],
+        )
+
+    @classmethod
+    def _row_to_legacy_chunk_row(cls, row: Any) -> DocumentLegacyChunkRow:
+        return DocumentLegacyChunkRow(
+            id=row["id"],
+            document_id=row["document_id"],
+            chunk_index=row["chunk_index"],
+            content=row["content"],
+            token_count=row["token_count"],
+            metadata=cls._parse_json(row["metadata"]),
+            created_at=row["created_at"],
+        )
+
+    @staticmethod
+    def _row_to_faq_row(row: Any) -> DocumentFaqEntryRow:
+        return DocumentFaqEntryRow(
+            id=row["id"],
+            product_id=row["product_id"],
+            document_id=row["document_id"],
+            question=row["question"],
+            answer=row["answer"],
+            source_page=row["source_page"],
+            created_at=row["created_at"],
         )

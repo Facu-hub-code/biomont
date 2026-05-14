@@ -19,6 +19,7 @@ este directorio.
 | 001 | [Foundation v1: bootstrap, RAG, agente WhatsApp, backoffice](./001-foundation-v1.md) | en curso |
 | 002 | [Vista espejo de conversaciones y playground del agente](./002-agent-conversations-mirror-and-playground.md) | borrador |
 | 003 | [Grafo LangGraph + retrieval hibrido + reestructuracion de conocimiento](./003-langgraph-hybrid-rag-and-knowledge-restructure.md) | implementada (pending: ingest del corpus real) |
+| 004 | [Backoffice: productos, documentos (chunks) y auditoria de agent-decisions](./004-backoffice-products-documents-and-agent-decisions.md) | implementada |
 
 ## Reglas de calidad
 

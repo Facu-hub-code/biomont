@@ -49,6 +49,16 @@ from app.schemas.documents import (
     DocumentUpdate,
     ReingestResponse,
 )
+from app.schemas.document_details import (
+    DocumentFaqEntryListResponse,
+    DocumentFaqEntryOut,
+    DocumentKnowledgeChunkListResponse,
+    DocumentKnowledgeChunkOut,
+    DocumentLegacyChunkListResponse,
+    DocumentLegacyChunkOut,
+    DocumentSectionListResponse,
+    DocumentSectionOut,
+)
 from app.services.etl_pipeline import DocumentIngestService
 
 _logger = get_logger("api.documents")
@@ -87,6 +97,12 @@ def _summary(row) -> DocumentSummary:
 
 def _detail(row) -> DocumentDetail:
     return DocumentDetail(**asdict(row))
+
+
+def _pagination(page: int, page_size: int) -> tuple[int, int]:
+    safe_page = max(1, page)
+    safe_page_size = min(max(1, page_size), 100)
+    return safe_page, safe_page_size
 
 
 @router.get("", response_model=list[DocumentSummary])
@@ -375,3 +391,109 @@ async def update_document(
         after=fields,
     )
     return _detail(updated)
+
+
+@router.get("/{document_id}/sections", response_model=DocumentSectionListResponse)
+async def list_document_sections(
+    document_id: UUID,
+    _: Annotated[CurrentUser, Depends(require_roles("admin", "scientist", "viewer"))],
+    documents: Annotated[DocumentRepository, Depends(get_documents)],
+    page: int = 1,
+    page_size: int = 25,
+) -> DocumentSectionListResponse:
+    document = await documents.get_document(document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    safe_page, safe_size = _pagination(page, page_size)
+    total, rows = await documents.list_document_sections(
+        document_id,
+        page=safe_page,
+        page_size=safe_size,
+    )
+    return DocumentSectionListResponse(
+        items=[DocumentSectionOut(**asdict(row)) for row in rows],
+        page=safe_page,
+        page_size=safe_size,
+        total=total,
+    )
+
+
+@router.get(
+    "/{document_id}/knowledge-chunks",
+    response_model=DocumentKnowledgeChunkListResponse,
+)
+async def list_document_knowledge_chunks(
+    document_id: UUID,
+    _: Annotated[CurrentUser, Depends(require_roles("admin", "scientist", "viewer"))],
+    documents: Annotated[DocumentRepository, Depends(get_documents)],
+    page: int = 1,
+    page_size: int = 25,
+) -> DocumentKnowledgeChunkListResponse:
+    document = await documents.get_document(document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    safe_page, safe_size = _pagination(page, page_size)
+    total, rows = await documents.list_document_knowledge_chunks(
+        document_id,
+        page=safe_page,
+        page_size=safe_size,
+    )
+    return DocumentKnowledgeChunkListResponse(
+        items=[DocumentKnowledgeChunkOut(**asdict(row)) for row in rows],
+        page=safe_page,
+        page_size=safe_size,
+        total=total,
+    )
+
+
+@router.get(
+    "/{document_id}/document-chunks",
+    response_model=DocumentLegacyChunkListResponse,
+)
+async def list_document_legacy_chunks(
+    document_id: UUID,
+    _: Annotated[CurrentUser, Depends(require_roles("admin", "scientist", "viewer"))],
+    documents: Annotated[DocumentRepository, Depends(get_documents)],
+    page: int = 1,
+    page_size: int = 25,
+) -> DocumentLegacyChunkListResponse:
+    document = await documents.get_document(document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    safe_page, safe_size = _pagination(page, page_size)
+    total, rows = await documents.list_document_legacy_chunks(
+        document_id,
+        page=safe_page,
+        page_size=safe_size,
+    )
+    return DocumentLegacyChunkListResponse(
+        items=[DocumentLegacyChunkOut(**asdict(row)) for row in rows],
+        page=safe_page,
+        page_size=safe_size,
+        total=total,
+    )
+
+
+@router.get("/{document_id}/faq-entries", response_model=DocumentFaqEntryListResponse)
+async def list_document_faq_entries(
+    document_id: UUID,
+    _: Annotated[CurrentUser, Depends(require_roles("admin", "scientist", "viewer"))],
+    documents: Annotated[DocumentRepository, Depends(get_documents)],
+    page: int = 1,
+    page_size: int = 25,
+) -> DocumentFaqEntryListResponse:
+    document = await documents.get_document(document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    safe_page, safe_size = _pagination(page, page_size)
+    total, rows = await documents.list_document_faq_entries(
+        document_id,
+        page=safe_page,
+        page_size=safe_size,
+    )
+    return DocumentFaqEntryListResponse(
+        items=[DocumentFaqEntryOut(**asdict(row)) for row in rows],
+        page=safe_page,
+        page_size=safe_size,
+        total=total,
+    )

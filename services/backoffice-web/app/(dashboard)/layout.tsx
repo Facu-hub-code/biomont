@@ -18,6 +18,8 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/conversations", label: "Chats" },
   { href: "/documents", label: "Documentos" },
+  { href: "/products", label: "Productos" },
+  { href: "/agent-decisions", label: "Decisiones del agente" },
   { href: "/rtcs", label: "RTCs" },
   { href: "/prompts", label: "System prompt" },
   { href: "/tickets", label: "Tickets" },

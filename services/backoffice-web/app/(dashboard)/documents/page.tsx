@@ -13,6 +13,16 @@ type Document = {
   updated_at: string;
 };
 
+type ProductItem = {
+  id: string;
+  name: string;
+  country_iso: string | null;
+};
+
+type ProductListResponse = {
+  items: ProductItem[];
+};
+
 async function uploadDocumentAction(formData: FormData) {
   "use server";
 
@@ -42,11 +52,18 @@ async function uploadDocumentAction(formData: FormData) {
   const upstream = new FormData();
   upstream.set("file", formData.get("file") as File);
   upstream.set("title", String(formData.get("title") ?? ""));
+  const productId = String(formData.get("product_id") ?? "").trim();
+  if (productId) {
+    upstream.set("product_id", productId);
+  }
   const productName = formData.get("product_name");
-  if (productName) upstream.set("product_name", String(productName));
+  if (productName && String(productName).trim()) {
+    upstream.set("product_name", String(productName));
+  }
   const country = formData.get("country_iso");
   if (country) upstream.set("country_iso", String(country));
   upstream.set("language", String(formData.get("language") ?? "es"));
+  upstream.set("kind", String(formData.get("kind") ?? "bitacora"));
 
   const response = await fetch(`${apiBase}/documents`, {
     method: "POST",
@@ -107,6 +124,7 @@ async function uploadDocumentAction(formData: FormData) {
 
 export default async function DocumentsPage() {
   let documents: Document[] = [];
+  let products: ProductItem[] = [];
   try {
     const raw = await apiRequest<Document[]>("/documents");
     if (!Array.isArray(raw)) {
@@ -162,6 +180,12 @@ export default async function DocumentsPage() {
     // #endregion
     throw err;
   }
+  try {
+    const productList = await apiRequest<ProductListResponse>("/products?page=1&page_size=100");
+    products = productList.items;
+  } catch {
+    products = [];
+  }
   // #region agent log
   fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
     method: "POST",
@@ -210,8 +234,26 @@ export default async function DocumentsPage() {
           <input id="title" name="title" required className="form-input" />
         </div>
         <div>
+          <label className="form-label" htmlFor="product_id">
+            Producto (catalogo)
+          </label>
+          <select id="product_id" name="product_id" className="form-input">
+            <option value="">Sin seleccionar</option>
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name} {product.country_iso ? `(${product.country_iso})` : "(GLOBAL)"}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="form-label" htmlFor="product_name">Producto</label>
-          <input id="product_name" name="product_name" className="form-input" />
+          <input
+            id="product_name"
+            name="product_name"
+            className="form-input"
+            placeholder="Opcional si no elegis del catalogo"
+          />
         </div>
         <div>
           <label className="form-label" htmlFor="country_iso">
@@ -227,6 +269,14 @@ export default async function DocumentsPage() {
         <div>
           <label className="form-label" htmlFor="language">Idioma</label>
           <input id="language" name="language" defaultValue="es" maxLength={2} className="form-input" />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="kind">Tipo</label>
+          <select id="kind" name="kind" defaultValue="bitacora" className="form-input">
+            <option value="ficha_tecnica">ficha_tecnica</option>
+            <option value="bitacora">bitacora</option>
+            <option value="balotario">balotario</option>
+          </select>
         </div>
         <div className="md:col-span-2">
           <button type="submit" className="btn-primary">

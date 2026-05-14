@@ -16,11 +16,13 @@ from biomont_common.db.pool import DatabasePool, create_pool
 from biomont_common.logging import configure_logging, get_logger
 
 from app.api.analytics_router import router as analytics_router
+from app.api.agent_decisions_router import router as agent_decisions_router
 from app.api.auth_router import router as auth_router
 from app.api.conversations_router import router as conversations_router
 from app.api.documents_router import router as documents_router
 from app.api.health_router import router as health_router
 from app.api.playground_bo_router import router as playground_bo_router
+from app.api.products_router import router as products_router
 from app.api.rtcs_router import router as rtcs_router
 from app.api.system_prompt_router import router as system_prompt_router
 from app.api.tickets_router import router as tickets_router
@@ -82,6 +84,8 @@ def create_app() -> FastAPI:
     app.include_router(system_prompt_router)
     app.include_router(tickets_router)
     app.include_router(analytics_router)
+    app.include_router(products_router)
+    app.include_router(agent_decisions_router)
     return app
 
 

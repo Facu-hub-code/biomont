@@ -21,11 +21,13 @@ from app.db.audit_repository import AuditRepository
 from app.db.bo_user_repository import BoUserRepository, BoUserRow
 from app.db.conversation_admin_repository import ConversationAdminRepository
 from app.db.document_repository import DocumentRepository
+from app.db.product_admin_repository import ProductAdminRepository
 from app.db.rtc_admin_repository import RtcAdminRepository
 from app.db.system_prompt_admin_repository import SystemPromptAdminRepository
 from app.db.ticket_repository import TicketAdminRepository
 from app.schemas.auth import CurrentUser
 from app.services.security import decode_access_token
+from biomont_common.db.agent_decision_repository import AgentDecisionRepository
 
 
 def get_pool(request: Request) -> DatabasePool:
@@ -57,6 +59,16 @@ def get_prompts(
 
 def get_tickets(pool: Annotated[DatabasePool, Depends(get_pool)]) -> TicketAdminRepository:
     return TicketAdminRepository(pool)
+
+
+def get_products(pool: Annotated[DatabasePool, Depends(get_pool)]) -> ProductAdminRepository:
+    return ProductAdminRepository(pool)
+
+
+def get_agent_decisions(
+    pool: Annotated[DatabasePool, Depends(get_pool)],
+) -> AgentDecisionRepository:
+    return AgentDecisionRepository(pool)
 
 
 def get_audit(pool: Annotated[DatabasePool, Depends(get_pool)]) -> AuditRepository:

@@ -3,6 +3,11 @@
 from biomont_common.db.conversation_state_repository import (
     ConversationStateRepository,
 )
+from biomont_common.db.agent_decision_repository import (
+    AgentDecisionDetailRow,
+    AgentDecisionListRow,
+    AgentDecisionRepository,
+)
 from biomont_common.db.faq_repository import FaqInput, FaqRepository
 from biomont_common.db.pool import (
     DatabasePool,
@@ -15,6 +20,9 @@ from biomont_common.db.product_repository import (
 )
 
 __all__ = [
+    "AgentDecisionDetailRow",
+    "AgentDecisionListRow",
+    "AgentDecisionRepository",
     "ConversationStateRepository",
     "DatabasePool",
     "FaqInput",
