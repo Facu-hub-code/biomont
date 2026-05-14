@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { revalidatePath } from "next/cache";
 
-import { apiRequest, getApiBaseUrl } from "@/lib/api";
+import { ActionFeedbackForm } from "@/components/action-feedback-form";
+import { SubmitButton } from "@/components/submit-button";
+import { apiRequest } from "@/lib/api";
+
+import { uploadDocumentAction } from "./actions";
 
 type Document = {
   id: string;
@@ -23,189 +26,21 @@ type ProductListResponse = {
   items: ProductItem[];
 };
 
-async function uploadDocumentAction(formData: FormData) {
-  "use server";
-
-  const apiBase = getApiBaseUrl();
-  const { cookies } = await import("next/headers");
-  const store = await cookies();
-  const token = store.get("biomont_session")?.value;
-  if (!token) {
-    // #region agent log
-    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
-      body: JSON.stringify({
-        sessionId: "33ab56",
-        runId: "pre-fix",
-        hypothesisId: "H5",
-        location: "documents/page.tsx:uploadDocumentAction",
-        message: "no session token, action returns early",
-        data: {},
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-    return;
-  }
-
-  const upstream = new FormData();
-  upstream.set("file", formData.get("file") as File);
-  upstream.set("title", String(formData.get("title") ?? ""));
-  const productId = String(formData.get("product_id") ?? "").trim();
-  if (productId) {
-    upstream.set("product_id", productId);
-  }
-  const productName = formData.get("product_name");
-  if (productName && String(productName).trim()) {
-    upstream.set("product_name", String(productName));
-  }
-  const country = formData.get("country_iso");
-  if (country) upstream.set("country_iso", String(country));
-  upstream.set("language", String(formData.get("language") ?? "es"));
-  upstream.set("kind", String(formData.get("kind") ?? "bitacora"));
-
-  const response = await fetch(`${apiBase}/documents`, {
-    method: "POST",
-    body: upstream,
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  // #region agent log
-  fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
-    body: JSON.stringify({
-      sessionId: "33ab56",
-      runId: "pre-fix",
-      hypothesisId: "H2",
-      location: "documents/page.tsx:uploadDocumentAction",
-      message: "POST /documents response",
-      data: { status: response.status, ok: response.ok, apiBaseHost: (() => { try { return new URL(apiBase).host; } catch { return "invalid"; } })() },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-  if (!response.ok) {
-    const text = await response.text();
-    // #region agent log
-    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
-      body: JSON.stringify({
-        sessionId: "33ab56",
-        runId: "pre-fix",
-        hypothesisId: "H2",
-        location: "documents/page.tsx:uploadDocumentAction",
-        message: "POST /documents error body preview",
-        data: { status: response.status, bodyPreview: text.slice(0, 300) },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-    throw new Error(text || `upload failed (${response.status})`);
-  }
-  revalidatePath("/documents");
-  // #region agent log
-  fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
-    body: JSON.stringify({
-      sessionId: "33ab56",
-      runId: "pre-fix",
-      hypothesisId: "H2",
-      location: "documents/page.tsx:uploadDocumentAction",
-      message: "upload ok, revalidatePath done",
-      data: {},
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-}
-
 export default async function DocumentsPage() {
-  let documents: Document[] = [];
-  let products: ProductItem[] = [];
-  try {
-    const raw = await apiRequest<Document[]>("/documents");
-    if (!Array.isArray(raw)) {
-      console.error(
-        "[bm-debug-33ab56]",
-        JSON.stringify({
-          hypothesisId: "H1",
-          message: "GET /documents not an array",
-          typeofPayload: typeof raw,
-          keys:
-            raw && typeof raw === "object" ? Object.keys(raw as object).slice(0, 20) : null,
-        }),
-      );
-      throw new Error("El API devolvió un formato inesperado al listar documentos.");
-    }
-    documents = raw;
-    // #region agent log
-    const first = documents[0];
-    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
-      body: JSON.stringify({
-        sessionId: "33ab56",
-        runId: "pre-fix",
-        hypothesisId: "H1",
-        location: "documents/page.tsx:DocumentsPage",
-        message: "GET /documents ok",
-        data: {
-          isArray: Array.isArray(documents),
-          length: documents.length,
-          firstUpdatedAt: first?.updated_at ?? null,
-          firstId: first?.id ?? null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-  } catch (err) {
-    // #region agent log
-    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
-      body: JSON.stringify({
-        sessionId: "33ab56",
-        runId: "pre-fix",
-        hypothesisId: "H1",
-        location: "documents/page.tsx:DocumentsPage",
-        message: "GET /documents failed",
-        data: { err: err instanceof Error ? err.message : String(err) },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-    throw err;
+  const raw = await apiRequest<Document[]>("/documents");
+  if (!Array.isArray(raw)) {
+    throw new Error("El API devolvió un formato inesperado al listar documentos.");
   }
+  const documents = raw;
+
+  let products: ProductItem[] = [];
   try {
     const productList = await apiRequest<ProductListResponse>("/products?page=1&page_size=100");
     products = productList.items;
   } catch {
     products = [];
   }
-  // #region agent log
-  fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
-    body: JSON.stringify({
-      sessionId: "33ab56",
-      runId: "pre-fix",
-      hypothesisId: "H4",
-      location: "documents/page.tsx:DocumentsPage",
-      message: "before render table",
-      data: {
-        sampleDatesOk: documents.every((d) => {
-          const t = Date.parse(d.updated_at);
-          return !Number.isNaN(t);
-        }),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
+
   return (
     <div className="space-y-8">
       <header>
@@ -215,75 +50,86 @@ export default async function DocumentsPage() {
         </p>
       </header>
 
-      <form action={uploadDocumentAction} className="card grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="md:col-span-2">
-          <label className="form-label" htmlFor="file">
-            Archivo PDF
-          </label>
-          <input
-            id="file"
-            name="file"
-            type="file"
-            accept="application/pdf"
-            required
-            className="form-input"
-          />
+      <ActionFeedbackForm
+        action={uploadDocumentAction}
+        successMessage="Documento enviado para procesamiento."
+      >
+        <div className="card grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="form-label" htmlFor="file">
+              Archivo PDF
+            </label>
+            <input
+              id="file"
+              name="file"
+              type="file"
+              accept="application/pdf"
+              required
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="title">
+              Titulo
+            </label>
+            <input id="title" name="title" required className="form-input" />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="product_id">
+              Producto (catalogo)
+            </label>
+            <select id="product_id" name="product_id" className="form-input">
+              <option value="">Sin seleccionar</option>
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name} {product.country_iso ? `(${product.country_iso})` : "(GLOBAL)"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label" htmlFor="product_name">
+              Producto
+            </label>
+            <input
+              id="product_name"
+              name="product_name"
+              className="form-input"
+              placeholder="Opcional si no elegis del catalogo"
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="country_iso">
+              Pais (iso2, vacio = global)
+            </label>
+            <input
+              id="country_iso"
+              name="country_iso"
+              maxLength={2}
+              className="form-input uppercase"
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="language">
+              Idioma
+            </label>
+            <input id="language" name="language" defaultValue="es" maxLength={2} className="form-input" />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="kind">
+              Tipo
+            </label>
+            <select id="kind" name="kind" defaultValue="bitacora" className="form-input">
+              <option value="ficha_tecnica">ficha_tecnica</option>
+              <option value="bitacora">bitacora</option>
+              <option value="balotario">balotario</option>
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <SubmitButton label="Procesar y validar" pendingLabel="Procesando…" />
+          </div>
         </div>
-        <div>
-          <label className="form-label" htmlFor="title">Titulo</label>
-          <input id="title" name="title" required className="form-input" />
-        </div>
-        <div>
-          <label className="form-label" htmlFor="product_id">
-            Producto (catalogo)
-          </label>
-          <select id="product_id" name="product_id" className="form-input">
-            <option value="">Sin seleccionar</option>
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name} {product.country_iso ? `(${product.country_iso})` : "(GLOBAL)"}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="form-label" htmlFor="product_name">Producto</label>
-          <input
-            id="product_name"
-            name="product_name"
-            className="form-input"
-            placeholder="Opcional si no elegis del catalogo"
-          />
-        </div>
-        <div>
-          <label className="form-label" htmlFor="country_iso">
-            Pais (iso2, vacio = global)
-          </label>
-          <input
-            id="country_iso"
-            name="country_iso"
-            maxLength={2}
-            className="form-input uppercase"
-          />
-        </div>
-        <div>
-          <label className="form-label" htmlFor="language">Idioma</label>
-          <input id="language" name="language" defaultValue="es" maxLength={2} className="form-input" />
-        </div>
-        <div>
-          <label className="form-label" htmlFor="kind">Tipo</label>
-          <select id="kind" name="kind" defaultValue="bitacora" className="form-input">
-            <option value="ficha_tecnica">ficha_tecnica</option>
-            <option value="bitacora">bitacora</option>
-            <option value="balotario">balotario</option>
-          </select>
-        </div>
-        <div className="md:col-span-2">
-          <button type="submit" className="btn-primary">
-            Procesar y validar
-          </button>
-        </div>
-      </form>
+      </ActionFeedbackForm>
 
       <table className="table-default">
         <thead>

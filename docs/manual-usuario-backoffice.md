@@ -1,5 +1,7 @@
 # Manual de usuario Backoffice Biomont
 
+**Manual extendido (procedimientos profundos, glosario, matrices de troubleshooting, orientado a equipos y a ingestión en IA):** [manual-usuario-backoffice-extendido.md](./manual-usuario-backoffice-extendido.md).
+
 Este manual detalla el uso operativo del backoffice para:
 
 - Gestion de documentos PDF y su ingestion.

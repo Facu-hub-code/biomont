@@ -1,6 +1,8 @@
-import { revalidatePath } from "next/cache";
-
+import { ActionFeedbackForm } from "@/components/action-feedback-form";
+import { SubmitButton } from "@/components/submit-button";
 import { apiRequest } from "@/lib/api";
+
+import { activatePromptAction, createPromptAction } from "./actions";
 
 type SystemPrompt = {
   id: string;
@@ -9,22 +11,6 @@ type SystemPrompt = {
   is_active: boolean;
   created_at: string;
 };
-
-async function createPromptAction(formData: FormData) {
-  "use server";
-  const content = String(formData.get("content") ?? "").trim();
-  if (!content) return;
-  await apiRequest("/system-prompts", { method: "POST", json: { content } });
-  revalidatePath("/prompts");
-}
-
-async function activatePromptAction(formData: FormData) {
-  "use server";
-  const version = Number(formData.get("version"));
-  if (!Number.isInteger(version)) return;
-  await apiRequest(`/system-prompts/${version}/activate`, { method: "POST" });
-  revalidatePath("/prompts");
-}
 
 export default async function SystemPromptsPage() {
   const prompts = await apiRequest<SystemPrompt[]>("/system-prompts");
@@ -43,23 +29,23 @@ export default async function SystemPromptsPage() {
           Version activa: v{active?.version ?? "-"}
         </h3>
         <pre className="whitespace-pre-wrap rounded-md bg-slate-50 p-4 text-sm text-slate-800">
-{active?.content ?? "(sin prompt activo)"}
+          {active?.content ?? "(sin prompt activo)"}
         </pre>
       </section>
 
-      <form action={createPromptAction} className="card space-y-4">
-        <h3 className="text-sm font-semibold text-slate-700">Crear nueva version</h3>
-        <textarea
-          name="content"
-          required
-          rows={10}
-          className="form-input font-mono"
-          placeholder="Eres el asistente de productos veterinarios de Biomont..."
-        />
-        <button type="submit" className="btn-primary">
-          Guardar y activar
-        </button>
-      </form>
+      <ActionFeedbackForm action={createPromptAction} successMessage="Nueva versión del prompt guardada.">
+        <div className="card space-y-4">
+          <h3 className="text-sm font-semibold text-slate-700">Crear nueva version</h3>
+          <textarea
+            name="content"
+            required
+            rows={10}
+            className="form-input font-mono"
+            placeholder="Eres el asistente de productos veterinarios de Biomont..."
+          />
+          <SubmitButton label="Guardar y activar" pendingLabel="Guardando…" />
+        </div>
+      </ActionFeedbackForm>
 
       <section>
         <h3 className="mb-3 text-sm font-semibold text-slate-700">Historial</h3>
@@ -84,12 +70,13 @@ export default async function SystemPromptsPage() {
                 </td>
                 <td>
                   {!prompt.is_active ? (
-                    <form action={activatePromptAction}>
+                    <ActionFeedbackForm
+                      action={activatePromptAction}
+                      successMessage={`Prompt v${prompt.version} activado.`}
+                    >
                       <input type="hidden" name="version" value={prompt.version} />
-                      <button type="submit" className="text-biomont-primary hover:underline">
-                        Activar
-                      </button>
-                    </form>
+                      <SubmitButton label="Activar" pendingLabel="Activando…" variant="secondary" className="text-xs" />
+                    </ActionFeedbackForm>
                   ) : null}
                 </td>
               </tr>

@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 
+import { formatFastApiDetail } from "@/lib/api-error";
+
 const SESSION_COOKIE = "biomont_session";
 
 export type ApiInit = RequestInit & {
@@ -94,8 +96,13 @@ export async function apiRequest<T = unknown>(path: string, init: ApiInit = {}):
     const payload =
       typeof data === "object" && data !== null ? (data as Record<string, unknown>) : undefined;
     const raw = payload ? payload["detail"] ?? payload["message"] : undefined;
-    const detail = raw ?? response.statusText;
-    throw new Error(typeof detail === "string" ? detail : "request failed");
+    const message =
+      raw !== undefined && raw !== null
+        ? formatFastApiDetail(raw)
+        : text.trim()
+          ? text.slice(0, 800)
+          : response.statusText;
+    throw new Error(message || "request failed");
   }
   return data as T;
 }

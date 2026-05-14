@@ -3,6 +3,8 @@ import Link from "next/link";
 import { apiRequest } from "@/lib/api";
 import { requireRole } from "@/lib/auth";
 
+import { AgentDecisionsFilterForm } from "./agent-decisions-filter-form";
+
 type AgentDecision = {
   id: string;
   decision: "answered" | "low_confidence" | "no_match" | "blocked" | "error";
@@ -49,7 +51,7 @@ export default async function AgentDecisionsPage({
         </p>
       </header>
 
-      <form className="card grid grid-cols-1 gap-4 md:grid-cols-4" method="get">
+      <AgentDecisionsFilterForm>
         <div>
           <label className="form-label" htmlFor="decision">
             Decision
@@ -80,12 +82,7 @@ export default async function AgentDecisionsPage({
             className="form-input"
           />
         </div>
-        <div className="flex items-end">
-          <button type="submit" className="btn-primary">
-            Filtrar
-          </button>
-        </div>
-      </form>
+      </AgentDecisionsFilterForm>
 
       <table className="table-default">
         <thead>

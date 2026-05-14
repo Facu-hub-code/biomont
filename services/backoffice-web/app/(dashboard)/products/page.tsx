@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { revalidatePath } from "next/cache";
 
+import { ActionFeedbackForm } from "@/components/action-feedback-form";
+import { SubmitButton } from "@/components/submit-button";
 import { apiRequest } from "@/lib/api";
 import { requireRole } from "@/lib/auth";
+
+import { createProductAction } from "./actions";
 
 type Product = {
   id: string;
@@ -21,20 +24,6 @@ type ProductListResponse = {
   total: number;
 };
 
-async function createProductAction(formData: FormData) {
-  "use server";
-  await requireRole(["admin", "scientist"]);
-  const payload = {
-    name: String(formData.get("name") ?? "").trim(),
-    brand: String(formData.get("brand") ?? "Biomont").trim() || "Biomont",
-    duration_type: String(formData.get("duration_type") ?? "").trim() || null,
-    description: String(formData.get("description") ?? "").trim() || null,
-    country_iso: String(formData.get("country_iso") ?? "").trim().toUpperCase() || null,
-  };
-  await apiRequest("/products", { method: "POST", json: payload });
-  revalidatePath("/products");
-}
-
 export default async function ProductsPage() {
   const user = await requireRole(["admin", "scientist", "viewer"]);
   const canMutate = user.role === "admin" || user.role === "scientist";
@@ -50,43 +39,43 @@ export default async function ProductsPage() {
       </header>
 
       {canMutate ? (
-        <form action={createProductAction} className="card grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label className="form-label" htmlFor="name">
-              Nombre
-            </label>
-            <input id="name" name="name" required className="form-input" />
+        <ActionFeedbackForm action={createProductAction} successMessage="Producto creado correctamente.">
+          <div className="card grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label className="form-label" htmlFor="name">
+                Nombre
+              </label>
+              <input id="name" name="name" required className="form-input" />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="brand">
+                Marca
+              </label>
+              <input id="brand" name="brand" defaultValue="Biomont" className="form-input" />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="country_iso">
+                Pais ISO2
+              </label>
+              <input id="country_iso" name="country_iso" maxLength={2} className="form-input uppercase" />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="duration_type">
+                Tipo de duracion
+              </label>
+              <input id="duration_type" name="duration_type" className="form-input" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="form-label" htmlFor="description">
+                Descripcion
+              </label>
+              <input id="description" name="description" className="form-input" />
+            </div>
+            <div className="md:col-span-3">
+              <SubmitButton label="Crear producto" pendingLabel="Creando…" />
+            </div>
           </div>
-          <div>
-            <label className="form-label" htmlFor="brand">
-              Marca
-            </label>
-            <input id="brand" name="brand" defaultValue="Biomont" className="form-input" />
-          </div>
-          <div>
-            <label className="form-label" htmlFor="country_iso">
-              Pais ISO2
-            </label>
-            <input id="country_iso" name="country_iso" maxLength={2} className="form-input uppercase" />
-          </div>
-          <div>
-            <label className="form-label" htmlFor="duration_type">
-              Tipo de duracion
-            </label>
-            <input id="duration_type" name="duration_type" className="form-input" />
-          </div>
-          <div className="md:col-span-2">
-            <label className="form-label" htmlFor="description">
-              Descripcion
-            </label>
-            <input id="description" name="description" className="form-input" />
-          </div>
-          <div className="md:col-span-3">
-            <button type="submit" className="btn-primary">
-              Crear producto
-            </button>
-          </div>
-        </form>
+        </ActionFeedbackForm>
       ) : null}
 
       <table className="table-default">

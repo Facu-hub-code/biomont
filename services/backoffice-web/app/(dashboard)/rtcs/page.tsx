@@ -1,6 +1,8 @@
-import { revalidatePath } from "next/cache";
-
+import { ActionFeedbackForm } from "@/components/action-feedback-form";
+import { SubmitButton } from "@/components/submit-button";
 import { apiRequest } from "@/lib/api";
+
+import { createRtcAction, deleteRtcAction } from "./actions";
 
 type Rtc = {
   id: string;
@@ -10,29 +12,6 @@ type Rtc = {
   country_isos: string[];
   created_at: string;
 };
-
-async function createRtcAction(formData: FormData) {
-  "use server";
-  const payload = {
-    phone_e164: String(formData.get("phone_e164") ?? "").trim(),
-    name: String(formData.get("name") ?? "").trim(),
-    enabled: formData.get("enabled") === "on",
-    country_isos: String(formData.get("country_isos") ?? "")
-      .split(",")
-      .map((c) => c.trim().toUpperCase())
-      .filter(Boolean),
-  };
-  await apiRequest("/rtcs", { method: "POST", json: payload });
-  revalidatePath("/rtcs");
-}
-
-async function deleteRtcAction(formData: FormData) {
-  "use server";
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-  await apiRequest(`/rtcs/${id}`, { method: "DELETE" });
-  revalidatePath("/rtcs");
-}
 
 export default async function RtcsPage() {
   const rtcs = await apiRequest<Rtc[]>("/rtcs");
@@ -45,26 +24,40 @@ export default async function RtcsPage() {
         </p>
       </header>
 
-      <form action={createRtcAction} className="card grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div>
-          <label className="form-label" htmlFor="phone_e164">Telefono (E.164)</label>
-          <input id="phone_e164" name="phone_e164" required className="form-input" placeholder="+51999..." />
+      <ActionFeedbackForm action={createRtcAction} successMessage="RTC creado.">
+        <div className="card grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div>
+            <label className="form-label" htmlFor="phone_e164">
+              Telefono (E.164)
+            </label>
+            <input
+              id="phone_e164"
+              name="phone_e164"
+              required
+              className="form-input"
+              placeholder="+51999..."
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="name">
+              Nombre
+            </label>
+            <input id="name" name="name" required className="form-input" />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="country_isos">
+              Paises (CSV iso2)
+            </label>
+            <input id="country_isos" name="country_isos" className="form-input" placeholder="PE,EC" />
+          </div>
+          <div className="flex items-end gap-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="enabled" defaultChecked /> Habilitado
+            </label>
+            <SubmitButton label="Crear" pendingLabel="Creando…" />
+          </div>
         </div>
-        <div>
-          <label className="form-label" htmlFor="name">Nombre</label>
-          <input id="name" name="name" required className="form-input" />
-        </div>
-        <div>
-          <label className="form-label" htmlFor="country_isos">Paises (CSV iso2)</label>
-          <input id="country_isos" name="country_isos" className="form-input" placeholder="PE,EC" />
-        </div>
-        <div className="flex items-end gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" name="enabled" defaultChecked /> Habilitado
-          </label>
-          <button type="submit" className="btn-primary">Crear</button>
-        </div>
-      </form>
+      </ActionFeedbackForm>
 
       <table className="table-default">
         <thead>
@@ -86,12 +79,10 @@ export default async function RtcsPage() {
               <td>{rtc.enabled ? "si" : "no"}</td>
               <td>{new Date(rtc.created_at).toLocaleString()}</td>
               <td>
-                <form action={deleteRtcAction}>
+                <ActionFeedbackForm action={deleteRtcAction} successMessage="RTC eliminado.">
                   <input type="hidden" name="id" value={rtc.id} />
-                  <button type="submit" className="text-red-600 hover:underline">
-                    Eliminar
-                  </button>
-                </form>
+                  <SubmitButton label="Eliminar" pendingLabel="Eliminando…" variant="dangerLink" />
+                </ActionFeedbackForm>
               </td>
             </tr>
           ))}

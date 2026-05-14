@@ -1,6 +1,8 @@
-import { revalidatePath } from "next/cache";
-
+import { ActionFeedbackForm } from "@/components/action-feedback-form";
+import { SubmitButton } from "@/components/submit-button";
 import { apiRequest } from "@/lib/api";
+
+import { updateTicketAction } from "./actions";
 
 type Ticket = {
   id: string;
@@ -11,18 +13,6 @@ type Ticket = {
   created_at: string;
   updated_at: string;
 };
-
-async function updateTicketAction(formData: FormData) {
-  "use server";
-  const id = String(formData.get("id") ?? "");
-  const newStatus = String(formData.get("status") ?? "");
-  if (!id || !newStatus) return;
-  await apiRequest(`/tickets/${id}`, {
-    method: "PATCH",
-    json: { status: newStatus },
-  });
-  revalidatePath("/tickets");
-}
 
 export default async function TicketsPage({
   searchParams,
@@ -75,8 +65,8 @@ export default async function TicketsPage({
                     ticket.status === "open"
                       ? "bg-amber-100 text-amber-800"
                       : ticket.status === "resolved"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-slate-100 text-slate-700"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-100 text-slate-700"
                   }`}
                 >
                   {ticket.status}
@@ -85,18 +75,23 @@ export default async function TicketsPage({
               <td className="max-w-md truncate">{ticket.summary}</td>
               <td>{new Date(ticket.created_at).toLocaleString()}</td>
               <td>
-                <form action={updateTicketAction} className="flex gap-2">
-                  <input type="hidden" name="id" value={ticket.id} />
-                  <select name="status" defaultValue={ticket.status} className="form-input py-1">
-                    <option value="open">open</option>
-                    <option value="in_progress">in_progress</option>
-                    <option value="resolved">resolved</option>
-                    <option value="wont_fix">wont_fix</option>
-                  </select>
-                  <button type="submit" className="btn-secondary text-xs">
-                    Actualizar
-                  </button>
-                </form>
+                <ActionFeedbackForm action={updateTicketAction} successMessage="Ticket actualizado.">
+                  <div className="flex flex-wrap gap-2">
+                    <input type="hidden" name="id" value={ticket.id} />
+                    <select name="status" defaultValue={ticket.status} className="form-input max-w-[9rem] py-1 text-xs">
+                      <option value="open">open</option>
+                      <option value="in_progress">in_progress</option>
+                      <option value="resolved">resolved</option>
+                      <option value="wont_fix">wont_fix</option>
+                    </select>
+                    <SubmitButton
+                      label="Actualizar"
+                      pendingLabel="Guardando…"
+                      variant="secondary"
+                      className="px-2 py-1 text-xs"
+                    />
+                  </div>
+                </ActionFeedbackForm>
               </td>
             </tr>
           ))}
