@@ -1,6 +1,8 @@
 
 # Análisis de patrones de título (PDF → texto extraído)
 
+> **Ubicación de los PDF:** carpeta local `samples/etl-regex-calibration/` (no versionada).
+
 **Método:** extracción con `pypdf` sobre las primeras páginas de cada archivo en esta carpeta. El pipeline real usa Docling → **markdown con `##`** en muchos casos; por eso al final hay recomendaciones que cubren **tanto texto plano PDF como markdown**.
 
 **Implementación actual:** `StructuredMarkdownChunker` en  
