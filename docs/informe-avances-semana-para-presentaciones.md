@@ -289,34 +289,3 @@ Commits de **`watch paths` por servicio** reducen redespliegues cruzados en mono
 4. Enviar pregunta en playground que fuerce **`ambiguous_product`** (sin alias claro).  
 5. Reenviar con alias exacto ⇒ ver recuperación plausible + **decisión `answered`** y `retrieved` no vacíos.  
 6. Abrir detalle **`agent-decisions/[id]`** y expandir `graph_trace`.
-
----
-
-## Riesgos y mitigaciones (copiar verbatim a annex operativo si hace falta)
-
-| Riesgo | Mitigación implementada/plan doc |
-| ------ | -------------------------------- |
-| Recall degradado tras reestructura | Comparador legacy + golden set baseline con tolerancia CI. |
-| Costo clasificadores LLM por mensaje | Cachés controladas extractor/intent donde spec indica; modelos económicos. |
-| Reingesta masiva pico Railway | Ejecutar en ventanas; togglear `AGENT_USE_GRAPH` si emergencia. |
-| Ambiguedad lexical FAQ vs chunks | Fusion score + fallback híbrido. |
-
----
-
-## Referencias rápidas de archivos (para profundización humana por IA que cite fuentes)
-
-- `docs/specs/003-langgraph-hybrid-rag-and-knowledge-restructure.md`  
-- `docs/specs/004-backoffice-products-documents-and-agent-decisions.md`  
-- `docs/specs/005-backoffice-async-feedback-and-loading-states.md`  
-- `docs/specs/002-agent-conversations-mirror-and-playground.md`  
-- `docs/manual-usuario-backoffice-extendido.md`  
-- `docs/etl-regex-calibration/README.md` (+ `ANALISIS_PATRONES_SECCIONES.md`)  
-- `services/backoffice-api/src/app/services/etl_pipeline.py`  
-- `services/backoffice-api/src/app/integrations/docling_converter.py`  
-- Rutas nuevas frontend bajo `services/backoffice-web/app/(dashboard)/`
-
----
-
-## Cierre ejecutivo una frase
-
-**Esta iteración cerró la brecha entre “vectores sobre PDF” y “sistema conocedor de productos con trazabilidad clínico-operativa”, anclando extracción en Docling, modelado físico-relacional guiado por layout PDF, y recuperación multimodal texto+semántica bajo grafo observable.**
