@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
+import { DocumentsDeletedToast } from "@/components/documents-deleted-toast";
 import { DocumentUploadForm } from "@/components/document-upload-form";
 import type { CatalogProduct } from "@/components/product-picker";
 import { apiRequest } from "@/lib/api";
@@ -10,6 +12,8 @@ type LinkedProduct = {
   is_primary: boolean;
 };
 
+type DocumentKind = "ficha_tecnica" | "bitacora" | "balotario";
+
 type Document = {
   id: string;
   title: string;
@@ -17,9 +21,23 @@ type Document = {
   linked_products: LinkedProduct[];
   country_iso: string | null;
   status: string;
+  kind: DocumentKind;
   chunk_count: number;
   updated_at: string;
 };
+
+const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
+  ficha_tecnica: "Ficha técnica",
+  bitacora: "Bitácora",
+  balotario: "Balotario",
+};
+
+function formatDocumentKind(kind: string): string {
+  if (kind in DOCUMENT_KIND_LABELS) {
+    return DOCUMENT_KIND_LABELS[kind as DocumentKind];
+  }
+  return kind;
+}
 
 function formatLinkedProducts(doc: Document): string {
   if (doc.linked_products?.length) {
@@ -54,6 +72,9 @@ export default async function DocumentsPage() {
 
   return (
     <div className="space-y-8">
+      <Suspense fallback={null}>
+        <DocumentsDeletedToast />
+      </Suspense>
       <header className="page-header">
         <h2 className="page-title">Documentos</h2>
         <p className="page-subtitle">
@@ -69,6 +90,7 @@ export default async function DocumentsPage() {
             <tr>
               <th>Titulo</th>
               <th>Productos (catalogo)</th>
+              <th>Tipo</th>
               <th>Pais</th>
               <th>Status</th>
               <th>Chunks</th>
@@ -81,6 +103,9 @@ export default async function DocumentsPage() {
               <tr key={doc.id}>
                 <td className="font-medium text-slate-900">{doc.title}</td>
                 <td className="max-w-xs text-sm">{formatLinkedProducts(doc)}</td>
+                <td>
+                  <span className="badge-neutral">{formatDocumentKind(doc.kind ?? "bitacora")}</span>
+                </td>
                 <td>{doc.country_iso ?? "GLOBAL"}</td>
                 <td>
                   <span className="badge-neutral uppercase">{doc.status}</span>

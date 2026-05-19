@@ -4,6 +4,8 @@ import {
   DocumentProductsPanel,
   type LinkedProduct,
 } from "@/components/document-products-panel";
+import { ConfirmDestructiveForm } from "@/components/confirm-destructive-form";
+import { deleteDocumentAction } from "@/app/(dashboard)/documents/[id]/actions";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { DocumentSectionNav } from "@/components/document-section-nav";
 import { ExpandableText } from "@/components/expandable-text";
@@ -55,8 +57,11 @@ type FaqEntry = {
 };
 
 type Props = {
+  documentId: string;
   title: string;
   metaLine: string;
+  chunkCount: number;
+  canMutate: boolean;
   markdown: string | null;
   sections: DocumentSection[];
   sectionsTotal: number;
@@ -106,8 +111,11 @@ function TokenCountCell({ count }: { count: number }) {
 }
 
 export function DocumentDetailView({
+  documentId,
   title,
   metaLine,
+  chunkCount,
+  canMutate,
   markdown,
   sections,
   sectionsTotal,
@@ -124,9 +132,22 @@ export function DocumentDetailView({
 
   return (
     <div className="space-y-6">
-      <header className="page-header">
-        <h2 className="page-title">{title}</h2>
-        <p className="page-subtitle">{metaLine}</p>
+      <header className="page-header flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="page-title">{title}</h2>
+          <p className="page-subtitle">{metaLine}</p>
+        </div>
+        {canMutate ? (
+          <ConfirmDestructiveForm
+            action={deleteDocumentAction}
+            triggerLabel="Eliminar documento"
+            dialogTitle="¿Eliminar este documento?"
+            dialogDescription={`Esta acción es irreversible. Se borrarán el documento "${title}", sus ${chunkCount} chunks de retrieval, secciones, entradas FAQ y vínculos con productos.`}
+            successMessage="Documento eliminado."
+          >
+            <input type="hidden" name="id" value={documentId} />
+          </ConfirmDestructiveForm>
+        ) : null}
       </header>
 
       <DocumentSectionNav sections={SECTION_LINKS} />

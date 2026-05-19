@@ -116,22 +116,30 @@ class ProductAdminRepository:
         description: str | None,
         country_iso: str | None,
     ) -> UUID:
-        sql = """
+        insert_product_sql = """
             INSERT INTO public.products
                 (name, brand, duration_type, description, country_iso)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id
         """
+        insert_alias_sql = """
+            INSERT INTO public.product_aliases
+                (product_id, alias, source, confidence)
+            VALUES ($1, $2, 'name', 1.0)
+        """
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
-                sql,
-                name,
-                brand,
-                duration_type,
-                description,
-                country_iso,
-            )
-        return row["id"]
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    insert_product_sql,
+                    name,
+                    brand,
+                    duration_type,
+                    description,
+                    country_iso,
+                )
+                product_id = row["id"]
+                await conn.execute(insert_alias_sql, product_id, name.strip())
+        return product_id
 
     async def update_product(
         self,

@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.dependencies import get_audit, get_current_user, get_products
 from app.api.products_router import router as products_router
+from app.db.audit_repository import dumps_audit_payload
 from app.schemas.auth import CurrentUser
 
 
@@ -41,8 +42,19 @@ class FakeAliasRow:
 
 
 class FakeAuditRepository:
-    async def record(self, **_kwargs) -> None:
-        return None
+    """Falla si `before`/`after` no son serializables como en producción."""
+
+    async def record(
+        self,
+        *,
+        before: dict | None = None,
+        after: dict | None = None,
+        **_kwargs,
+    ) -> None:
+        if before is not None:
+            dumps_audit_payload(before)
+        if after is not None:
+            dumps_audit_payload(after)
 
 
 class FakeProductRepository:
@@ -93,17 +105,28 @@ class FakeProductRepository:
             raise asyncpg.UniqueViolationError("duplicate")
         new_id = uuid.uuid4()
         now = datetime.now(timezone.utc)
+        name = kwargs["name"]
         self.products[new_id] = FakeProductRow(
             id=new_id,
-            name=kwargs["name"],
+            name=name,
             brand=kwargs["brand"],
             duration_type=kwargs.get("duration_type"),
             description=kwargs.get("description"),
             country_iso=kwargs.get("country_iso"),
             created_at=now,
             updated_at=now,
-            alias_count=0,
+            alias_count=1,
             document_count=0,
+        )
+        alias_id = uuid.uuid4()
+        self.aliases[(new_id, alias_id)] = FakeAliasRow(
+            id=alias_id,
+            product_id=new_id,
+            alias=name.strip(),
+            normalized_alias=name.strip().lower(),
+            source="name",
+            confidence=1.0,
+            created_at=now,
         )
         return new_id
 
@@ -268,6 +291,23 @@ async def test_create_product_403_for_viewer(viewer_user) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_product_creates_default_name_alias(scientist_user) -> None:
+    repo = FakeProductRepository()
+    app = _build_app(repo, scientist_user)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        create_resp = await client.post(
+            "/products",
+            json={"name": "Proteggo 3M", "brand": "Biomont"},
+        )
+        assert create_resp.status_code == 201
+        product_id = create_resp.json()["id"]
+        aliases_resp = await client.get(f"/products/{product_id}/aliases")
+    assert aliases_resp.status_code == 200
+    items = aliases_resp.json()["items"]
+    assert any(a["alias"] == "Proteggo 3M" and a["source"] == "name" for a in items)
+
+
+@pytest.mark.asyncio
 async def test_create_product_409_when_conflict(scientist_user) -> None:
     repo = FakeProductRepository()
     repo.raise_conflict = True
@@ -297,6 +337,28 @@ async def test_delete_product_409_on_fk_conflict(admin_user) -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.delete(f"/products/{repo.product_id}")
     assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_delete_alias_returns_204(scientist_user) -> None:
+    repo = FakeProductRepository()
+    app = _build_app(repo, scientist_user)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.delete(
+            f"/products/{repo.product_id}/aliases/{repo.alias_id}",
+        )
+    assert response.status_code == 204
+    assert (repo.product_id, repo.alias_id) not in repo.aliases
+
+
+@pytest.mark.asyncio
+async def test_delete_alias_404_when_missing(scientist_user) -> None:
+    repo = FakeProductRepository()
+    app = _build_app(repo, scientist_user)
+    missing = uuid.uuid4()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.delete(f"/products/{repo.product_id}/aliases/{missing}")
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

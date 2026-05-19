@@ -36,7 +36,7 @@ export function ActionFeedbackForm({
     if (state.ok) {
       showToast("success", state.message ?? successMessage ?? "Operación completada.", dedupeKey);
       if (redirectOnSuccess) {
-        router.push(redirectOnSuccess);
+        router.replace(redirectOnSuccess);
       } else {
         router.refresh();
       }

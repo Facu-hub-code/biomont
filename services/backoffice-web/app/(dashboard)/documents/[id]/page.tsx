@@ -76,7 +76,8 @@ export default async function DocumentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  await requireRole(["admin", "scientist", "viewer"]);
+  const user = await requireRole(["admin", "scientist", "viewer"]);
+  const canMutate = user.role === "admin" || user.role === "scientist";
 
   const [doc, sections, knowledgeChunks, legacyChunks, faqEntries, linkedProducts] =
     await Promise.all([
@@ -100,8 +101,11 @@ export default async function DocumentDetailPage({
 
   return (
     <DocumentDetailView
+      documentId={doc.id}
       title={doc.title}
       metaLine={metaLine}
+      chunkCount={doc.chunk_count}
+      canMutate={canMutate}
       markdown={doc.markdown}
       sections={sections.items}
       sectionsTotal={sections.total}

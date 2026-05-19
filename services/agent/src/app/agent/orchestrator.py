@@ -376,10 +376,7 @@ class AgentOrchestrator:
 
 
 def _render_answer(answer: RagAnswer) -> str:
-    citations_block = "\n".join(
-        f"- {c.document_title} (similitud {c.similarity * 100:.0f}%)"
-        for c in answer.citations
-    )
+    citations_block = "\n".join(f"- {c.document_title}" for c in answer.citations)
     return f"{answer.answer}\n\nFuentes:\n{citations_block}"
 
 

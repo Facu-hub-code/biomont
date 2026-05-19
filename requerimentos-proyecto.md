@@ -10,7 +10,7 @@ Una de las claves del exito de este proyecto es la correcta vectorizacion de doc
 ## Agente
 - Debemos poder trackear las conversaciones y "desiciones" del agente.
 - Debemos contar con un sistema de tickets, cuando el agente no sabe una respuesta tenga la opcion de crear una excepcion "No tengo esa info" + "Ticket al sistema"
-- "El agente SOLO habla de documentos validados." Esto significa que debe referenciar en todo momento que documento contiene esa informacion (campo que debe tomar de los metadatos del RAG). Y el porcentaje de certeca = similarity que obtuvo.
+- "El agente SOLO habla de documentos validados." Esto significa que debe referenciar en todo momento que documento contiene esa informacion (campo que debe tomar de los metadatos del RAG). La similitud se persiste en `agent_decisions` para auditoria interna; el mensaje al RTC solo cita el titulo del documento en el bloque Fuentes.
 - Solo responde a RTCs en sistema. Esto significa que debe haber una tabla de usuarios habilitados por numero de telefono donde el agente habilita a quien responde y a quien no.
 
 

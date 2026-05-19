@@ -71,25 +71,6 @@ export async function apiRequest<T = unknown>(path: string, init: ApiInit = {}):
   try {
     data = text ? JSON.parse(text) : undefined;
   } catch {
-    // #region agent log
-    fetch("http://127.0.0.1:7513/ingest/a21c9983-9408-402f-b42a-56ff93d3e6ac", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "33ab56" },
-      body: JSON.stringify({
-        sessionId: "33ab56",
-        runId: "pre-fix",
-        hypothesisId: "H3",
-        location: "lib/api.ts:apiRequest",
-        message: "JSON.parse failed",
-        data: {
-          path,
-          status: response.status,
-          textPreview: text.slice(0, 200),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     throw new SyntaxError(`invalid JSON for ${path}`);
   }
   if (!response.ok) {

@@ -559,6 +559,13 @@ class DocumentRepository:
             )
         return await self.get_document(document_id)
 
+    async def delete_document(self, document_id: UUID) -> bool:
+        """Borra el documento; CASCADE elimina chunks, secciones, FAQ y vínculos."""
+        sql = "DELETE FROM public.documents WHERE id = $1"
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(sql, document_id)
+        return result.endswith("1")
+
     @staticmethod
     def _row_to_document(row: Any) -> DocumentRow:
         data = dict(row)

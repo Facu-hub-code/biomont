@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { apiRequest } from "@/lib/api";
 import { formatApiError } from "@/lib/api-error";
@@ -35,4 +36,23 @@ export async function saveDocumentProductsAction(
   } catch (e) {
     return { ok: false, message: formatApiError(e) };
   }
+}
+
+export async function deleteDocumentAction(
+  _prev: ActionFeedbackState | null,
+  formData: FormData,
+): Promise<ActionFeedbackState> {
+  await requireRole(["admin", "scientist"]);
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { ok: false, message: "Falta el identificador del documento." };
+
+  try {
+    await apiRequest(`/documents/${id}`, { method: "DELETE" });
+  } catch (e) {
+    return { ok: false, message: formatApiError(e) };
+  }
+
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${id}`);
+  redirect("/documents?deleted=1");
 }

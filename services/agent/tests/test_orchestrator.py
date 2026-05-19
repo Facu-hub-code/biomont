@@ -10,6 +10,7 @@ from biomont_common.schemas.rag import RagAnswer, RetrievedChunk
 
 from app.agent.orchestrator import (
     AgentOrchestrator,
+    _render_answer,
     effective_retrieval_similarity_threshold,
 )
 from app.agent.rag_pipeline import PipelineOutput
@@ -68,6 +69,23 @@ def test_effective_similarity_threshold_adjusts_for_graph_fusion_cap() -> None:
         pipeline_uses_graph=False,
         rag_vector_weight=0.7,
     ) == pytest.approx(0.75)
+
+
+def test_render_answer_lists_document_titles_without_similarity() -> None:
+    answer = RagAnswer(
+        answer="Dosis recomendada.",
+        citations=[
+            {
+                "document_id": str(uuid.uuid4()),
+                "document_title": "Ficha tecnica X",
+                "similarity": 0.91,
+            }
+        ],
+    )
+    rendered = _render_answer(answer)
+    assert "Ficha tecnica X" in rendered
+    assert "Fuentes:" in rendered
+    assert "similitud" not in rendered.lower()
 
 
 @pytest.mark.asyncio
@@ -152,6 +170,8 @@ async def test_orchestrator_answered_persists_citations(fake_rtc_user, fake_chun
 
     assert result.decision == "answered"
     assert "Ficha producto X" in result.reply_text
+    assert "Fuentes:" in result.reply_text
+    assert "similitud" not in result.reply_text.lower()
     assistant_messages = [m for m in conv.messages if m["role"] == "assistant"]
     assert assistant_messages, "deberia haber un mensaje del agente persistido"
     assert assistant_messages[0]["citations"], "las citas deben estar persistidas"
