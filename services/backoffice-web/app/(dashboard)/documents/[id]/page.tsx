@@ -1,4 +1,6 @@
+import { DocumentProductsPanel } from "@/components/document-products-panel";
 import { apiRequest } from "@/lib/api";
+import { requireRole } from "@/lib/auth";
 
 type DocumentDetail = {
   id: string;
@@ -53,21 +55,63 @@ type FaqEntry = {
   source_page: number | null;
 };
 
+type LinkedProduct = {
+  product_id: string;
+  name: string;
+  brand: string;
+  is_primary: boolean;
+};
+
+type LinkedProductsResponse = {
+  items: LinkedProduct[];
+};
+
+type CatalogProduct = {
+  id: string;
+  name: string;
+  country_iso: string | null;
+};
+
+type ProductListResponse = {
+  items: CatalogProduct[];
+};
+
 export default async function DocumentDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [doc, sections, knowledgeChunks, legacyChunks, faqEntries] = await Promise.all([
-    apiRequest<DocumentDetail>(`/documents/${id}`),
-    apiRequest<PaginatedResponse<DocumentSection>>(`/documents/${id}/sections?page=1&page_size=100`),
-    apiRequest<PaginatedResponse<KnowledgeChunk>>(
-      `/documents/${id}/knowledge-chunks?page=1&page_size=100`,
-    ),
-    apiRequest<PaginatedResponse<LegacyChunk>>(`/documents/${id}/document-chunks?page=1&page_size=100`),
-    apiRequest<PaginatedResponse<FaqEntry>>(`/documents/${id}/faq-entries?page=1&page_size=100`),
-  ]);
+  const user = await requireRole(["admin", "scientist", "viewer"]);
+  const canMutate = user.role === "admin" || user.role === "scientist";
+
+  const [doc, sections, knowledgeChunks, legacyChunks, faqEntries, linkedProducts] =
+    await Promise.all([
+      apiRequest<DocumentDetail>(`/documents/${id}`),
+      apiRequest<PaginatedResponse<DocumentSection>>(
+        `/documents/${id}/sections?page=1&page_size=100`,
+      ),
+      apiRequest<PaginatedResponse<KnowledgeChunk>>(
+        `/documents/${id}/knowledge-chunks?page=1&page_size=100`,
+      ),
+      apiRequest<PaginatedResponse<LegacyChunk>>(
+        `/documents/${id}/document-chunks?page=1&page_size=100`,
+      ),
+      apiRequest<PaginatedResponse<FaqEntry>>(
+        `/documents/${id}/faq-entries?page=1&page_size=100`,
+      ),
+      apiRequest<LinkedProductsResponse>(`/documents/${id}/products`),
+    ]);
+
+  let catalog: CatalogProduct[] = [];
+  try {
+    const productList = await apiRequest<ProductListResponse>(
+      "/products?page=1&page_size=200",
+    );
+    catalog = productList.items;
+  } catch {
+    catalog = [];
+  }
 
   return (
     <div className="space-y-6">
@@ -78,6 +122,14 @@ export default async function DocumentDetailPage({
           {doc.country_iso ?? "GLOBAL"} · {doc.status} · {doc.chunk_count} chunks
         </p>
       </header>
+
+      <DocumentProductsPanel
+        documentId={id}
+        catalog={catalog}
+        linked={linkedProducts.items}
+        canMutate={canMutate}
+      />
+
       <div role="tablist" className="flex flex-wrap gap-2">
         <a href="#tab-markdown" className="btn-secondary text-xs">
           Markdown

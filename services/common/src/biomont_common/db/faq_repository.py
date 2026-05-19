@@ -95,7 +95,16 @@ class FaqRepository:
             WITH vec AS (
                 SELECT f.id, 1 - (f.embedding <=> $1) AS vec_score
                 FROM public.faq_entries f
-                WHERE ($2::uuid IS NULL OR f.product_id = $2)
+                WHERE (
+                    $2::uuid IS NULL
+                    OR f.product_id = $2
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.document_products dp
+                        WHERE dp.document_id = f.document_id
+                          AND dp.product_id = $2
+                    )
+                )
                 ORDER BY f.embedding <=> $1
                 LIMIT $3
             ),
@@ -106,7 +115,16 @@ class FaqRepository:
                            similarity(f.normalized_question, $5)
                        ) AS bm_score
                 FROM public.faq_entries f
-                WHERE ($2::uuid IS NULL OR f.product_id = $2)
+                WHERE (
+                    $2::uuid IS NULL
+                    OR f.product_id = $2
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.document_products dp
+                        WHERE dp.document_id = f.document_id
+                          AND dp.product_id = $2
+                    )
+                )
                   AND (
                       f.tsv @@ plainto_tsquery('spanish', $4)
                       OR f.normalized_question % $5

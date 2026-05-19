@@ -74,18 +74,27 @@ export default async function DocumentsPage() {
             </label>
             <input id="title" name="title" required className="form-input" />
           </div>
-          <div>
-            <label className="form-label" htmlFor="product_id">
-              Producto (catalogo)
+          <div className="md:col-span-2">
+            <label className="form-label" htmlFor="product_ids">
+              Productos del catalogo (puede elegir varios)
             </label>
-            <select id="product_id" name="product_id" className="form-input">
-              <option value="">Sin seleccionar</option>
+            <select
+              id="product_ids"
+              name="product_ids"
+              multiple
+              size={Math.min(6, Math.max(3, products.length))}
+              className="form-input min-h-[8rem]"
+            >
               {products.map((product) => (
                 <option key={product.id} value={product.id}>
                   {product.name} {product.country_iso ? `(${product.country_iso})` : "(GLOBAL)"}
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              El primero seleccionado sera el producto primario al ingestar. Cmd/Ctrl+clic para
+              varios (ej. Proteggo M y 3M en la misma bitacora).
+            </p>
           </div>
           <div>
             <label className="form-label" htmlFor="product_name">

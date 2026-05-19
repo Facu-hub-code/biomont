@@ -25,8 +25,16 @@ export async function uploadDocumentAction(
     const upstream = new FormData();
     upstream.set("file", file);
     upstream.set("title", String(formData.get("title") ?? ""));
+    const productIds = formData.getAll("product_ids").map(String).filter(Boolean);
+    for (const pid of productIds) {
+      upstream.append("product_ids", pid);
+    }
     const productId = String(formData.get("product_id") ?? "").trim();
-    if (productId) upstream.set("product_id", productId);
+    if (productId && !productIds.includes(productId)) {
+      upstream.set("product_id", productId);
+    } else if (productIds.length > 0) {
+      upstream.set("product_id", productIds[0]);
+    }
     const productName = formData.get("product_name");
     if (productName && String(productName).trim()) {
       upstream.set("product_name", String(productName));

@@ -8,10 +8,21 @@ from uuid import UUID
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.api.dependencies import get_audit, get_products, require_roles
+from app.api.dependencies import (
+    get_audit,
+    get_document_products,
+    get_products,
+    require_roles,
+)
 from app.db.audit_repository import AuditRepository
 from app.db.product_admin_repository import ProductAdminRepository
+from biomont_common.db.document_product_repository import DocumentProductRepository
 from app.schemas.auth import CurrentUser
+from app.schemas.document_products import (
+    ProductDocumentLinkCreate,
+    ProductLinkedDocumentOut,
+    ProductLinkedDocumentsResponse,
+)
 from app.schemas.products import (
     ProductAliasCreate,
     ProductAliasListResponse,
@@ -307,4 +318,123 @@ async def delete_product_alias(
         entity_id=alias_id,
         action="delete",
         before=asdict(existing),
+    )
+
+
+@router.get(
+    "/{product_id}/documents",
+    response_model=ProductLinkedDocumentsResponse,
+)
+async def list_product_documents(
+    product_id: UUID,
+    products: ProductAdminRepository = Depends(get_products),
+    links: DocumentProductRepository = Depends(get_document_products),
+    _: CurrentUser = Depends(require_roles("admin", "scientist", "viewer")),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+) -> ProductLinkedDocumentsResponse:
+    product = await products.get_product(product_id)
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    safe_page, safe_size = _pagination(page, page_size)
+    total, rows = await links.list_documents_for_product(
+        product_id, page=safe_page, page_size=safe_size
+    )
+    return ProductLinkedDocumentsResponse(
+        items=[
+            ProductLinkedDocumentOut(
+                document_id=r.document_id,
+                title=r.title,
+                kind=r.kind,
+                status=r.status,
+                country_iso=r.country_iso,
+                is_primary=r.is_primary,
+                updated_at=r.updated_at,
+            )
+            for r in rows
+        ],
+        page=safe_page,
+        page_size=safe_size,
+        total=total,
+    )
+
+
+@router.post(
+    "/{product_id}/documents",
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_product_document(
+    product_id: UUID,
+    payload: ProductDocumentLinkCreate,
+    products: ProductAdminRepository = Depends(get_products),
+    links: DocumentProductRepository = Depends(get_document_products),
+    audit: AuditRepository = Depends(get_audit),
+    current: CurrentUser = Depends(require_roles("admin", "scientist")),
+) -> dict[str, str]:
+    product = await products.get_product(product_id)
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    if not await links.document_exists(payload.document_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Documento no encontrado.",
+        )
+    if await links.link_exists(
+        product_id=product_id, document_id=payload.document_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El documento ya esta vinculado a este producto.",
+        )
+    try:
+        await links.link(
+            product_id=product_id,
+            document_id=payload.document_id,
+            is_primary=payload.is_primary,
+            created_by=current.id,
+        )
+    except asyncpg.UniqueViolationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El documento ya esta vinculado a este producto.",
+        ) from exc
+    await audit.record(
+        actor_id=current.id,
+        entity="document_products",
+        entity_id=payload.document_id,
+        action="link",
+        after={
+            "product_id": str(product_id),
+            "document_id": str(payload.document_id),
+            "is_primary": payload.is_primary,
+        },
+    )
+    return {"status": "linked"}
+
+
+@router.delete(
+    "/{product_id}/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
+async def unlink_product_document(
+    product_id: UUID,
+    document_id: UUID,
+    products: ProductAdminRepository = Depends(get_products),
+    links: DocumentProductRepository = Depends(get_document_products),
+    audit: AuditRepository = Depends(get_audit),
+    current: CurrentUser = Depends(require_roles("admin", "scientist")),
+) -> None:
+    product = await products.get_product(product_id)
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    deleted = await links.unlink(product_id=product_id, document_id=document_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await audit.record(
+        actor_id=current.id,
+        entity="document_products",
+        entity_id=document_id,
+        action="unlink",
+        before={"product_id": str(product_id), "document_id": str(document_id)},
     )

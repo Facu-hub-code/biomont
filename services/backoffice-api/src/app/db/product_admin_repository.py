@@ -66,8 +66,7 @@ class ProductAdminRepository:
             ) a ON a.product_id = p.id
             LEFT JOIN (
                 SELECT product_id, count(*) AS document_count
-                FROM public.documents
-                WHERE product_id IS NOT NULL
+                FROM public.document_products
                 GROUP BY product_id
             ) d ON d.product_id = p.id
             ORDER BY p.name ASC
@@ -99,8 +98,7 @@ class ProductAdminRepository:
             ) a ON a.product_id = p.id
             LEFT JOIN (
                 SELECT product_id, count(*) AS document_count
-                FROM public.documents
-                WHERE product_id IS NOT NULL
+                FROM public.document_products
                 GROUP BY product_id
             ) d ON d.product_id = p.id
             WHERE p.id = $1

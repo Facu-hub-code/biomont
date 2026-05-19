@@ -26,6 +26,7 @@ from uuid import UUID
 
 from langchain_core.embeddings import Embeddings
 
+from biomont_common.db.document_product_repository import DocumentProductRepository
 from biomont_common.db.faq_repository import FaqInput, FaqRepository
 from biomont_common.db.pool import DatabasePool
 from biomont_common.db.product_repository import ProductRepository
@@ -88,6 +89,7 @@ class DocumentIngestService:
         faq_repository: FaqRepository | None = None,
         faq_extractor: FaqExtractorProtocol | None = None,
         product_repository: ProductRepository | None = None,
+        document_products: DocumentProductRepository | None = None,
     ) -> None:
         self._pool = pool
         self._documents = documents
@@ -106,6 +108,7 @@ class DocumentIngestService:
         self._faq_repository = faq_repository
         self._faq_extractor = faq_extractor
         self._product_repository = product_repository
+        self._document_products = document_products
 
     async def ingest_pdf(
         self,
@@ -119,6 +122,7 @@ class DocumentIngestService:
         uploaded_by: UUID,
         kind: str = "bitacora",
         product_id: UUID | None = None,
+        product_ids: list[UUID] | None = None,
     ) -> IngestResult:
         document_kind = DocumentKind(kind)
         sha = compute_sha256(pdf_bytes)
@@ -135,9 +139,16 @@ class DocumentIngestService:
                 markdown_chars=len(existing.markdown or ""),
             )
 
+        linked_ids = list(dict.fromkeys(product_ids or []))
         resolved_product_id = product_id
+        if resolved_product_id and resolved_product_id not in linked_ids:
+            linked_ids.insert(0, resolved_product_id)
+        elif resolved_product_id is None and linked_ids:
+            resolved_product_id = linked_ids[0]
+
         if (
-            resolved_product_id is None
+            not linked_ids
+            and resolved_product_id is None
             and self._product_repository is not None
             and product_name
         ):
@@ -148,6 +159,7 @@ class DocumentIngestService:
             )
             if candidates and candidates[0].similarity >= 0.95:
                 resolved_product_id = candidates[0].product_id
+                linked_ids = [resolved_product_id]
 
         document_id = await self._documents.create_pending(
             title=title,
@@ -160,6 +172,14 @@ class DocumentIngestService:
             kind=document_kind.value,
             product_id=resolved_product_id,
         )
+
+        if self._document_products is not None and linked_ids:
+            await self._document_products.replace_for_document(
+                document_id=document_id,
+                product_ids=linked_ids,
+                primary_product_id=resolved_product_id,
+                created_by=uploaded_by,
+            )
 
         try:
             result = await self._do_ingest(

@@ -5,10 +5,14 @@ import { SubmitButton } from "@/components/submit-button";
 import { apiRequest } from "@/lib/api";
 import { requireRole } from "@/lib/auth";
 
+import Link from "next/link";
+
 import {
   createAliasAction,
   deleteAliasAction,
   deleteProductAction,
+  linkDocumentAction,
+  unlinkDocumentAction,
   updateAliasAction,
   updateProductAction,
 } from "./actions";
@@ -37,6 +41,26 @@ type AliasListResponse = {
   items: Alias[];
 };
 
+type LinkedDocument = {
+  document_id: string;
+  title: string;
+  kind: string;
+  status: string;
+  country_iso: string | null;
+  is_primary: boolean;
+  updated_at: string;
+};
+
+type LinkedDocumentsResponse = {
+  items: LinkedDocument[];
+  total: number;
+};
+
+type DocumentSummary = {
+  id: string;
+  title: string;
+};
+
 export default async function ProductDetailPage({
   params,
 }: {
@@ -54,6 +78,16 @@ export default async function ProductDetailPage({
     notFound();
   }
   const aliases = await apiRequest<AliasListResponse>(`/products/${id}/aliases?page=1&page_size=100`);
+  const linkedDocs = await apiRequest<LinkedDocumentsResponse>(
+    `/products/${id}/documents?page=1&page_size=100`,
+  );
+  let allDocuments: DocumentSummary[] = [];
+  try {
+    const raw = await apiRequest<DocumentSummary[]>("/documents");
+    allDocuments = Array.isArray(raw) ? raw : [];
+  } catch {
+    allDocuments = [];
+  }
 
   return (
     <div className="space-y-8">
@@ -136,6 +170,86 @@ export default async function ProductDetailPage({
           ) : null}
         </section>
       ) : null}
+
+      <section className="card space-y-4">
+        <h3 className="text-lg font-semibold text-slate-900">Documentos vinculados</h3>
+        {canMutate ? (
+          <ActionFeedbackForm action={linkDocumentAction} successMessage="Documento vinculado.">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <input type="hidden" name="product_id" value={product.id} />
+              <div className="md:col-span-2">
+                <label className="form-label" htmlFor="document_id">
+                  Vincular documento
+                </label>
+                <select id="document_id" name="document_id" required className="form-input">
+                  <option value="">Elegir documento…</option>
+                  {allDocuments.map((doc) => (
+                    <option key={doc.id} value={doc.id}>
+                      {doc.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="is_primary" className="h-4 w-4" />
+                  Marcar como primario
+                </label>
+              </div>
+              <div className="flex items-end">
+                <SubmitButton label="Vincular" pendingLabel="Vinculando…" />
+              </div>
+            </div>
+          </ActionFeedbackForm>
+        ) : null}
+        <table className="table-default">
+          <thead>
+            <tr>
+              <th>Titulo</th>
+              <th>Tipo</th>
+              <th>Status</th>
+              <th>Rol</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {linkedDocs.items.map((doc) => (
+              <tr key={doc.document_id}>
+                <td className="font-medium">{doc.title}</td>
+                <td>{doc.kind}</td>
+                <td>{doc.status}</td>
+                <td>{doc.is_primary ? "Primario" : "Compartido"}</td>
+                <td className="space-x-3">
+                  <Link
+                    href={`/documents/${doc.document_id}`}
+                    className="text-biomont-primary hover:underline"
+                  >
+                    Ver
+                  </Link>
+                  {canMutate ? (
+                    <ActionFeedbackForm
+                      action={unlinkDocumentAction}
+                      successMessage="Vinculo eliminado."
+                    >
+                      <input type="hidden" name="product_id" value={product.id} />
+                      <input type="hidden" name="document_id" value={doc.document_id} />
+                      <SubmitButton
+                        label="Quitar"
+                        pendingLabel="Quitando…"
+                        variant="dangerLink"
+                        className="text-xs"
+                      />
+                    </ActionFeedbackForm>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {linkedDocs.items.length === 0 ? (
+          <p className="text-sm text-slate-500">No hay documentos vinculados a este producto.</p>
+        ) : null}
+      </section>
 
       <section className="card space-y-4">
         <h3 className="text-lg font-semibold text-slate-900">Aliases</h3>

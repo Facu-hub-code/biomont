@@ -98,6 +98,52 @@ export async function updateAliasAction(
   }
 }
 
+export async function linkDocumentAction(
+  _prev: ActionFeedbackState | null,
+  formData: FormData,
+): Promise<ActionFeedbackState> {
+  try {
+    await requireRole(["admin", "scientist"]);
+    const productId = String(formData.get("product_id") ?? "");
+    const documentId = String(formData.get("document_id") ?? "").trim();
+    if (!productId || !documentId) {
+      return { ok: false, message: "Producto y documento son obligatorios." };
+    }
+    const isPrimary = formData.get("is_primary") === "on";
+    await apiRequest(`/products/${productId}/documents`, {
+      method: "POST",
+      json: { document_id: documentId, is_primary: isPrimary },
+    });
+    revalidatePath(`/products/${productId}`);
+    revalidatePath(`/documents/${documentId}`);
+    return { ok: true, message: "Documento vinculado." };
+  } catch (e) {
+    return { ok: false, message: formatApiError(e) };
+  }
+}
+
+export async function unlinkDocumentAction(
+  _prev: ActionFeedbackState | null,
+  formData: FormData,
+): Promise<ActionFeedbackState> {
+  try {
+    await requireRole(["admin", "scientist"]);
+    const productId = String(formData.get("product_id") ?? "");
+    const documentId = String(formData.get("document_id") ?? "");
+    if (!productId || !documentId) {
+      return { ok: false, message: "Faltan identificadores." };
+    }
+    await apiRequest(`/products/${productId}/documents/${documentId}`, {
+      method: "DELETE",
+    });
+    revalidatePath(`/products/${productId}`);
+    revalidatePath(`/documents/${documentId}`);
+    return { ok: true, message: "Vinculo eliminado." };
+  } catch (e) {
+    return { ok: false, message: formatApiError(e) };
+  }
+}
+
 export async function deleteAliasAction(
   _prev: ActionFeedbackState | null,
   formData: FormData,

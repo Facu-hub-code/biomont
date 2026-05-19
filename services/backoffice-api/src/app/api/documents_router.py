@@ -19,6 +19,7 @@ from fastapi import (
     status,
 )
 
+from biomont_common.db.document_product_repository import DocumentProductRepository
 from biomont_common.db.faq_repository import FaqRepository
 from biomont_common.db.pool import DatabasePool
 from biomont_common.db.product_repository import ProductRepository
@@ -34,6 +35,7 @@ from biomont_common.schemas.knowledge import DocumentKind
 from app.api.dependencies import (
     get_audit,
     get_current_user,
+    get_document_products,
     get_documents,
     get_pool,
     get_rag,
@@ -48,6 +50,11 @@ from app.schemas.documents import (
     DocumentSummary,
     DocumentUpdate,
     ReingestResponse,
+)
+from app.schemas.document_products import (
+    DocumentLinkedProductOut,
+    DocumentLinkedProductsList,
+    DocumentProductsReplace,
 )
 from app.schemas.document_details import (
     DocumentFaqEntryListResponse,
@@ -105,6 +112,23 @@ def _pagination(page: int, page_size: int) -> tuple[int, int]:
     return safe_page, safe_page_size
 
 
+def _merge_ingest_product_ids(
+    product_id: UUID | None,
+    product_ids: list[UUID] | None,
+) -> tuple[list[UUID], UUID | None]:
+    """Unifica product_id legacy y lista multi-producto del formulario."""
+
+    merged: list[UUID] = []
+    if product_ids:
+        for pid in product_ids:
+            if pid not in merged:
+                merged.append(pid)
+    if product_id is not None and product_id not in merged:
+        merged.insert(0, product_id)
+    primary = merged[0] if merged else None
+    return merged, primary
+
+
 @router.get("", response_model=list[DocumentSummary])
 async def list_documents(
     _: Annotated[CurrentUser, Depends(get_current_user)],
@@ -154,6 +178,7 @@ async def upload_document(
     language: str = Form(default="es"),
     kind: str = Form(default="bitacora"),
     product_id: UUID | None = Form(default=None),
+    product_ids: Annotated[list[UUID] | None, Form()] = None,
 ) -> DocumentDetail:
     try:
         DocumentKind(kind)
@@ -192,6 +217,10 @@ async def upload_document(
     embeddings = build_embeddings()
     faq_repository = FaqRepository(pool)
     product_repository = ProductRepository(pool)
+    document_products = DocumentProductRepository(pool)
+    merged_product_ids, primary_product_id = _merge_ingest_product_ids(
+        product_id, product_ids
+    )
     faq_extractor = (
         FaqExtractor(chat_model=build_chat_model(temperature=0.0))
         if kind == DocumentKind.balotario.value
@@ -205,6 +234,7 @@ async def upload_document(
         embeddings=embeddings,
         faq_repository=faq_repository,
         product_repository=product_repository,
+        document_products=document_products,
         faq_extractor=faq_extractor,
     )
 
@@ -218,7 +248,8 @@ async def upload_document(
             language=language,
             uploaded_by=current.id,
             kind=kind,
-            product_id=product_id,
+            product_id=primary_product_id,
+            product_ids=merged_product_ids,
         )
 
         document = await documents.get_document(result.document_id)
@@ -391,6 +422,84 @@ async def update_document(
         after=fields,
     )
     return _detail(updated)
+
+
+@router.get("/{document_id}/products", response_model=DocumentLinkedProductsList)
+async def list_document_products(
+    document_id: UUID,
+    documents: Annotated[DocumentRepository, Depends(get_documents)],
+    links: Annotated[DocumentProductRepository, Depends(get_document_products)],
+    _: Annotated[CurrentUser, Depends(require_roles("admin", "scientist", "viewer"))],
+) -> DocumentLinkedProductsList:
+    document = await documents.get_document(document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    rows = await links.list_products_for_document(document_id)
+    return DocumentLinkedProductsList(
+        items=[
+            DocumentLinkedProductOut(
+                product_id=r.product_id,
+                name=r.name,
+                brand=r.brand,
+                is_primary=r.is_primary,
+            )
+            for r in rows
+        ]
+    )
+
+
+@router.patch("/{document_id}/products", response_model=DocumentLinkedProductsList)
+async def replace_document_products(
+    document_id: UUID,
+    payload: DocumentProductsReplace,
+    documents: Annotated[DocumentRepository, Depends(get_documents)],
+    links: Annotated[DocumentProductRepository, Depends(get_document_products)],
+    audit: Annotated[AuditRepository, Depends(get_audit)],
+    current: Annotated[CurrentUser, Depends(require_roles("admin", "scientist"))],
+) -> DocumentLinkedProductsList:
+    document = await documents.get_document(document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    for pid in payload.product_ids:
+        if not await links.product_exists(pid):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Producto no encontrado: {pid}",
+            )
+
+    try:
+        await links.replace_for_document(
+            document_id=document_id,
+            product_ids=payload.product_ids,
+            primary_product_id=payload.primary_product_id,
+            created_by=current.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    await audit.record(
+        actor_id=current.id,
+        entity="document_products",
+        entity_id=document_id,
+        action="replace",
+        after=payload.model_dump(mode="json"),
+    )
+    rows = await links.list_products_for_document(document_id)
+    return DocumentLinkedProductsList(
+        items=[
+            DocumentLinkedProductOut(
+                product_id=r.product_id,
+                name=r.name,
+                brand=r.brand,
+                is_primary=r.is_primary,
+            )
+            for r in rows
+        ]
+    )
 
 
 @router.get("/{document_id}/sections", response_model=DocumentSectionListResponse)

@@ -255,7 +255,16 @@ class RagRepository:
                       OR d.country_iso IS NULL
                       OR d.country_iso = ANY($3::char(2)[])
                   )
-                  AND ($4::uuid IS NULL OR c.product_id = $4)
+                  AND (
+                      $4::uuid IS NULL
+                      OR c.product_id = $4
+                      OR EXISTS (
+                          SELECT 1
+                          FROM public.document_products dp
+                          WHERE dp.document_id = c.document_id
+                            AND dp.product_id = $4
+                      )
+                  )
                   AND (
                       $5::text[] IS NULL
                       OR c.kind::text = ANY($5::text[])

@@ -13,6 +13,7 @@ from uuid import UUID
 import jwt
 from fastapi import Depends, Header, HTTPException, Request, status
 
+from biomont_common.db.document_product_repository import DocumentProductRepository
 from biomont_common.db.pool import DatabasePool
 from biomont_common.db.rag_repository import RagRepository
 
@@ -63,6 +64,12 @@ def get_tickets(pool: Annotated[DatabasePool, Depends(get_pool)]) -> TicketAdmin
 
 def get_products(pool: Annotated[DatabasePool, Depends(get_pool)]) -> ProductAdminRepository:
     return ProductAdminRepository(pool)
+
+
+def get_document_products(
+    pool: Annotated[DatabasePool, Depends(get_pool)],
+) -> DocumentProductRepository:
+    return DocumentProductRepository(pool)
 
 
 def get_agent_decisions(
