@@ -13,6 +13,12 @@ DocumentStatus = Literal[
 DocumentKindLiteral = Literal["ficha_tecnica", "bitacora", "balotario"]
 
 
+class DocumentLinkedProductBrief(BaseModel):
+    product_id: UUID
+    name: str
+    is_primary: bool = False
+
+
 class DocumentSummary(BaseModel):
     id: UUID
     title: str
@@ -28,6 +34,7 @@ class DocumentSummary(BaseModel):
     updated_at: datetime
     kind: DocumentKindLiteral = "bitacora"
     product_id: UUID | None = None
+    linked_products: list[DocumentLinkedProductBrief] = Field(default_factory=list)
     chunk_count: int = 0
 
 

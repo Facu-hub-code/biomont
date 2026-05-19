@@ -47,6 +47,7 @@ from app.integrations.docling_converter import get_docling_pdf_converter
 from app.schemas.auth import CurrentUser
 from app.schemas.documents import (
     DocumentDetail,
+    DocumentLinkedProductBrief,
     DocumentSummary,
     DocumentUpdate,
     ReingestResponse,
@@ -99,11 +100,31 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 
 def _summary(row) -> DocumentSummary:
-    return DocumentSummary(**{k: v for k, v in asdict(row).items() if k != "markdown"})
+    data = {k: v for k, v in asdict(row).items() if k not in ("markdown", "linked_products")}
+    linked = getattr(row, "linked_products", None) or []
+    data["linked_products"] = [
+        DocumentLinkedProductBrief(
+            product_id=lp.product_id,
+            name=lp.name,
+            is_primary=lp.is_primary,
+        )
+        for lp in linked
+    ]
+    return DocumentSummary(**data)
 
 
 def _detail(row) -> DocumentDetail:
-    return DocumentDetail(**asdict(row))
+    data = {k: v for k, v in asdict(row).items() if k not in ("linked_products",)}
+    linked = getattr(row, "linked_products", None) or []
+    data["linked_products"] = [
+        DocumentLinkedProductBrief(
+            product_id=lp.product_id,
+            name=lp.name,
+            is_primary=lp.is_primary,
+        )
+        for lp in linked
+    ]
+    return DocumentDetail(**data)
 
 
 def _pagination(page: int, page_size: int) -> tuple[int, int]:

@@ -6,15 +6,34 @@ import { apiRequest } from "@/lib/api";
 
 import { uploadDocumentAction } from "./actions";
 
+type LinkedProduct = {
+  product_id: string;
+  name: string;
+  is_primary: boolean;
+};
+
 type Document = {
   id: string;
   title: string;
   product_name: string | null;
+  linked_products: LinkedProduct[];
   country_iso: string | null;
   status: string;
   chunk_count: number;
   updated_at: string;
 };
+
+function formatLinkedProducts(doc: Document): string {
+  if (doc.linked_products?.length) {
+    return doc.linked_products
+      .map((p) => (p.is_primary ? `${p.name} (primario)` : p.name))
+      .join(", ");
+  }
+  if (doc.product_name?.trim()) {
+    return doc.product_name;
+  }
+  return "-";
+}
 
 type ProductItem = {
   id: string;
@@ -144,7 +163,7 @@ export default async function DocumentsPage() {
         <thead>
           <tr>
             <th>Titulo</th>
-            <th>Producto</th>
+            <th>Productos (catalogo)</th>
             <th>Pais</th>
             <th>Status</th>
             <th>Chunks</th>
@@ -156,7 +175,7 @@ export default async function DocumentsPage() {
           {documents.map((doc) => (
             <tr key={doc.id}>
               <td className="font-medium">{doc.title}</td>
-              <td>{doc.product_name ?? "-"}</td>
+              <td className="max-w-xs text-sm">{formatLinkedProducts(doc)}</td>
               <td>{doc.country_iso ?? "GLOBAL"}</td>
               <td>
                 <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium uppercase">

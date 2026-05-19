@@ -1,4 +1,7 @@
-import { DocumentProductsPanel } from "@/components/document-products-panel";
+import {
+  DocumentProductsPanel,
+  type LinkedProduct,
+} from "@/components/document-products-panel";
 import { apiRequest } from "@/lib/api";
 import { requireRole } from "@/lib/auth";
 
@@ -6,11 +9,21 @@ type DocumentDetail = {
   id: string;
   title: string;
   product_name: string | null;
+  linked_products?: LinkedProduct[];
   country_iso: string | null;
   status: string;
   chunk_count: number;
   markdown: string | null;
 };
+
+function formatProductLine(doc: DocumentDetail): string {
+  if (doc.linked_products?.length) {
+    return doc.linked_products
+      .map((p) => (p.is_primary ? `${p.name} (primario)` : p.name))
+      .join(", ");
+  }
+  return doc.product_name ?? "Sin producto";
+}
 
 type PaginatedResponse<T> = {
   items: T[];
@@ -53,13 +66,6 @@ type FaqEntry = {
   question: string;
   answer: string;
   source_page: number | null;
-};
-
-type LinkedProduct = {
-  product_id: string;
-  name: string;
-  brand: string;
-  is_primary: boolean;
 };
 
 type LinkedProductsResponse = {
@@ -118,8 +124,8 @@ export default async function DocumentDetailPage({
       <header>
         <h2 className="text-2xl font-semibold text-slate-900">{doc.title}</h2>
         <p className="text-sm text-slate-500">
-          {doc.product_name ?? "Sin producto"} ·{" "}
-          {doc.country_iso ?? "GLOBAL"} · {doc.status} · {doc.chunk_count} chunks
+          {formatProductLine(doc)} · {doc.country_iso ?? "GLOBAL"} · {doc.status} ·{" "}
+          {doc.chunk_count} chunks
         </p>
       </header>
 

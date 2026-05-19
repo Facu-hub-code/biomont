@@ -19,6 +19,13 @@ from biomont_common.db.pool import DatabasePool
 
 
 @dataclass(slots=True)
+class LinkedProductOnDocument:
+    product_id: UUID
+    name: str
+    is_primary: bool = False
+
+
+@dataclass(slots=True)
 class DocumentRow:
     id: UUID
     title: str
@@ -37,6 +44,7 @@ class DocumentRow:
     updated_at: datetime
     kind: str = "bitacora"
     product_id: UUID | None = None
+    linked_products: list[LinkedProductOnDocument] | None = None
     chunk_count: int = 0
 
 
@@ -150,7 +158,82 @@ class DocumentRepository:
         """
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(query)
-        return [self._row_to_document(row) for row in rows]
+        documents = [self._row_to_document(row) for row in rows]
+        if not documents:
+            return documents
+        links = await self._fetch_linked_products_by_document(
+            conn=None,
+            document_ids=[doc.id for doc in documents],
+        )
+        missing_primary = [
+            doc for doc in documents if not links.get(doc.id) and doc.product_id
+        ]
+        if missing_primary:
+            async with self._pool.acquire() as conn:
+                prim_rows = await conn.fetch(
+                    """
+                    SELECT id, name
+                    FROM public.products
+                    WHERE id = ANY($1::uuid[])
+                    """,
+                    [doc.product_id for doc in missing_primary],
+                )
+            prim_by_id = {r["id"]: r["name"] for r in prim_rows}
+            for doc in missing_primary:
+                name = prim_by_id.get(doc.product_id)
+                if name:
+                    links[doc.id] = [
+                        LinkedProductOnDocument(
+                            product_id=doc.product_id,
+                            name=name,
+                            is_primary=True,
+                        )
+                    ]
+
+        for doc in documents:
+            doc.linked_products = links.get(doc.id, [])
+        return documents
+
+    async def _fetch_linked_products_by_document(
+        self,
+        *,
+        conn: asyncpg.Connection | None,
+        document_ids: Sequence[UUID],
+    ) -> dict[UUID, list[LinkedProductOnDocument]]:
+        if not document_ids:
+            return {}
+
+        sql = """
+            SELECT
+                dp.document_id,
+                p.id AS product_id,
+                p.name,
+                dp.is_primary
+            FROM public.document_products dp
+            JOIN public.products p ON p.id = dp.product_id
+            WHERE dp.document_id = ANY($1::uuid[])
+            ORDER BY dp.document_id, dp.is_primary DESC, p.name ASC
+        """
+
+        async def _run(connection: asyncpg.Connection) -> dict[UUID, list[LinkedProductOnDocument]]:
+            rows = await connection.fetch(sql, list(document_ids))
+            grouped: dict[UUID, list[LinkedProductOnDocument]] = {}
+            for row in rows:
+                doc_id = row["document_id"]
+                grouped.setdefault(doc_id, []).append(
+                    LinkedProductOnDocument(
+                        product_id=row["product_id"],
+                        name=row["name"],
+                        is_primary=bool(row["is_primary"]),
+                    )
+                )
+            return grouped
+
+        if conn is not None:
+            return await _run(conn)
+
+        async with self._pool.acquire() as acquired:
+            return await _run(acquired)
 
     async def get_document(self, document_id: UUID) -> DocumentRow | None:
         async with self._pool.acquire() as conn:
@@ -167,7 +250,14 @@ class DocumentRepository:
                 """,
                 document_id,
             )
-        return self._row_to_document(row) if row else None
+        if row is None:
+            return None
+        document = self._row_to_document(row)
+        links = await self._fetch_linked_products_by_document(
+            conn=None, document_ids=[document_id]
+        )
+        document.linked_products = links.get(document_id, [])
+        return document
 
     async def list_document_sections(
         self,
@@ -493,6 +583,7 @@ class DocumentRepository:
             updated_at=data["updated_at"],
             kind=str(data.get("kind") or "bitacora"),
             product_id=data.get("product_id"),
+            linked_products=[],
             chunk_count=int(data.get("chunk_count") or 0),
         )
 

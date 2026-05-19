@@ -11,10 +11,10 @@ type CatalogProduct = {
   country_iso: string | null;
 };
 
-type LinkedProduct = {
+export type LinkedProduct = {
   product_id: string;
   name: string;
-  brand: string;
+  brand?: string;
   is_primary: boolean;
 };
 
