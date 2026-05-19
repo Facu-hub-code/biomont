@@ -59,18 +59,6 @@ export default async function ProductsPage() {
               </label>
               <input id="country_iso" name="country_iso" maxLength={2} className="form-input uppercase" />
             </div>
-            <div>
-              <label className="form-label" htmlFor="duration_type">
-                Tipo de duracion
-              </label>
-              <input id="duration_type" name="duration_type" className="form-input" />
-            </div>
-            <div className="md:col-span-2">
-              <label className="form-label" htmlFor="description">
-                Descripcion
-              </label>
-              <input id="description" name="description" className="form-input" />
-            </div>
             <div className="md:col-span-3">
               <SubmitButton label="Crear producto" pendingLabel="Creando…" />
             </div>

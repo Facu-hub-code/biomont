@@ -10,7 +10,6 @@ import Link from "next/link";
 import {
   createAliasAction,
   deleteAliasAction,
-  deleteProductAction,
   linkDocumentAction,
   unlinkDocumentAction,
   updateAliasAction,
@@ -69,7 +68,6 @@ export default async function ProductDetailPage({
   const { id } = await params;
   const user = await requireRole(["admin", "scientist", "viewer"]);
   const canMutate = user.role === "admin" || user.role === "scientist";
-  const canDelete = user.role === "admin";
 
   let product: Product;
   try {
@@ -153,21 +151,6 @@ export default async function ProductDetailPage({
               </div>
             </div>
           </ActionFeedbackForm>
-          {canDelete ? (
-            <ActionFeedbackForm
-              action={deleteProductAction}
-              successMessage="Producto eliminado."
-              redirectOnSuccess="/products"
-            >
-              <input type="hidden" name="id" value={product.id} />
-              <SubmitButton
-                label="Eliminar producto"
-                pendingLabel="Eliminando…"
-                variant="secondary"
-                className="border-red-200 text-red-700 hover:bg-red-50"
-              />
-            </ActionFeedbackForm>
-          ) : null}
         </section>
       ) : null}
 
