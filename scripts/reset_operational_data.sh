@@ -2,8 +2,8 @@
 # =====================================================================
 # reset_operational_data.sh
 #
-# Ejecuta scripts/reset_operational_data.sql (borrado masivo de datos
-# operativos). Ver advertencias en el archivo .sql.
+# Ejecuta scripts/clean_test_data.sql (borrado masivo de datos operativos).
+# Para preview y confirmación interactiva, usar ./scripts/clean_test_data.sh
 #
 # Uso (desde la raiz del repo):
 #   ./scripts/reset_operational_data.sh
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly SQL_FILE="${ROOT}/scripts/reset_operational_data.sql"
+readonly SQL_FILE="${ROOT}/scripts/clean_test_data.sql"
 
 log() {
   printf "[reset_operational_data] %s\n" "$*" >&2
@@ -39,6 +39,8 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
   log "ERROR: DATABASE_URL no definida. Exportala o crea .env en la raiz del repo."
   exit 2
 fi
+
+cd "${ROOT}"
 
 # Misma heuristica que railway_psql.sh para hostname interno de Railway.
 conn="${DATABASE_URL}"

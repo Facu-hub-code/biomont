@@ -115,6 +115,11 @@ railway run psql -c "
 "
 ```
 
+### 7. Limpiar datos de prueba (chats, RAG, productos, tickets)
+
+Usar la skill **clean-biomont-test-data** y `scripts/clean_test_data.sh`
+(con `--dry-run` primero). No duplicar TRUNCATE manual en el chat.
+
 ## Reglas duras
 
 - **NO** ejecutar `DROP DATABASE`, `DROP SCHEMA`, `DROP TABLE` ni
