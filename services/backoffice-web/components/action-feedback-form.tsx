@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import type { ActionFeedbackState } from "@/lib/form-action-state";
@@ -11,10 +11,11 @@ type Props = {
     prevState: ActionFeedbackState | null,
     formData: FormData,
   ) => Promise<ActionFeedbackState>;
-  children: React.ReactNode;
+  children: ReactNode;
   successMessage?: string;
   /** Tras éxito, navegar (p. ej. borrar producto → /products). El toast sigue visible (provider en layout). */
   redirectOnSuccess?: string;
+  onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
 };
 
 export function ActionFeedbackForm({
@@ -22,6 +23,7 @@ export function ActionFeedbackForm({
   children,
   successMessage,
   redirectOnSuccess,
+  onSubmit,
 }: Props) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -43,5 +45,9 @@ export function ActionFeedbackForm({
     }
   }, [state, successMessage, redirectOnSuccess, router, showToast]);
 
-  return <form action={formAction}>{children}</form>;
+  return (
+    <form action={formAction} onSubmit={onSubmit}>
+      {children}
+    </form>
+  );
 }
