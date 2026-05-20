@@ -174,7 +174,11 @@ _BITACORA_MACRO_DOT_RE = re.compile(
 _BITACORA_SUB_RE = re.compile(
     r"^\s*(?P<num>\d{1,2}\.\d{1,2})\.?\s+(?P<title>.+?)\s*$"
 )
-_BALOTARIO_Q_RE = re.compile(r"^\s*•\s*¿(?P<question>.+?)\?\s*$")
+# Docling suele emitir `## · ¿...?` (punto medio U+00B7), no siempre `•` (U+2022).
+_BALOTARIO_BULLET_CHARS = "•·\\*\\-"
+_BALOTARIO_Q_RE = re.compile(
+    rf"^\s*[{_BALOTARIO_BULLET_CHARS}]\s*¿(?P<question>.+?)\?\s*$"
+)
 _BALOTARIO_NUMBERED_DOT_Q_RE = re.compile(
     r"^\s*(?P<num>\d{1,2})\s*\.\s*(?P<question>¿.+?\?)\s*$",
 )
@@ -552,7 +556,7 @@ class StructuredMarkdownChunker:
         return sections
 
     def _split_balotario(self, text: str) -> list[StructuredSection]:
-        """Pares pregunta-respuesta: viñeta `• ¿...?`, `N. ¿...?`, `N ¿...?`."""
+        """Pares pregunta-respuesta: viñeta `•/·/-/* ¿...?`, `N. ¿...?`, `N ¿...?`."""
 
         sections: list[StructuredSection] = []
         current_question: str | None = None

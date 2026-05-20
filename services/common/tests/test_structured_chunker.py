@@ -161,6 +161,32 @@ def test_balotario_detects_numbered_and_bullet_questions():
     assert any(s.number == "3" for s in result.sections)
 
 
+_BALOTARIO_DOCLING_HEADINGS = """\
+## Balotario de preguntas
+
+## · ¿Puedo usarlo en gestantes y lactantes?
+
+No existe informacion que sugiera riesgo en gestacion.
+
+## · ¿Cual es la dosis recomendada?
+
+10 mg/kg cada 12 semanas, via oral.
+"""
+
+
+def test_balotario_detects_docling_middle_dot_heading_questions():
+    """Docling emite `## · ¿...?` (punto medio), no siempre viñeta `•`."""
+
+    chunker = StructuredMarkdownChunker(chunk_tokens=1000)
+    result = chunker.split(_BALOTARIO_DOCLING_HEADINGS, kind=DocumentKind.balotario)
+
+    assert len(result.sections) == 2
+    titles = [s.title or "" for s in result.sections]
+    assert any("gestantes" in t for t in titles)
+    assert any("dosis" in t.lower() for t in titles)
+    assert all(c.section_type == "faq_item" for c in result.chunks)
+
+
 def test_ficha_tecnica_matches_section_after_markdown_heading():
     md = """\
 ## 1. NOMBRE COMERCIAL DEL PRODUCTO
