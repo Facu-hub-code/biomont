@@ -8,10 +8,12 @@ import pytest
 
 from biomont_common.schemas.rag import RagAnswer, RetrievedChunk
 
+from app.agent.graph.graph import GraphOutput
 from app.agent.orchestrator import (
     AgentOrchestrator,
     _render_answer,
     effective_retrieval_similarity_threshold,
+    maybe_product_confirmation_reply,
 )
 from app.agent.rag_pipeline import PipelineOutput
 
@@ -51,6 +53,64 @@ def _build_orchestrator(*, pipeline_output: PipelineOutput, rtc_user: FakeRtcUse
         ),
         conv,
     )
+
+
+def _graph_output_stub(**kwargs: object) -> GraphOutput:
+    """GraphOutput minimo para tests unitarios."""
+
+    defaults: dict[str, object] = {
+        "retrieved": [],
+        "top_similarity": 0.0,
+        "answer_text": None,
+        "citations": [],
+        "intent": None,
+        "product_id": None,
+        "product_name": None,
+        "product_inherited": False,
+        "ambiguous_candidates": [],
+        "faq_hits": [],
+        "faq_direct_answer": None,
+        "graph_trace": [],
+        "error": None,
+    }
+    defaults.update(kwargs)
+    return GraphOutput(**defaults)  # type: ignore[arg-type]
+
+
+def test_maybe_product_confirmation_none_when_not_answered() -> None:
+    pid = uuid.uuid4()
+    go = _graph_output_stub(
+        product_id=pid,
+        product_name="Proteggo M",
+        product_inherited=False,
+    )
+    assert (
+        maybe_product_confirmation_reply(decision="no_match", graph_output=go)
+        is None
+    )
+
+
+def test_maybe_product_confirmation_none_without_product_id() -> None:
+    go = _graph_output_stub(product_id=None, product_name="Algo")
+    assert maybe_product_confirmation_reply(decision="answered", graph_output=go) is None
+
+
+def test_maybe_product_confirmation_resolved_vs_inherited() -> None:
+    pid = uuid.uuid4()
+    resolved = _graph_output_stub(
+        product_id=pid,
+        product_name="Proteggo M",
+        product_inherited=False,
+    )
+    inherited = _graph_output_stub(
+        product_id=pid,
+        product_name="Proteggo M",
+        product_inherited=True,
+    )
+    r = maybe_product_confirmation_reply(decision="answered", graph_output=resolved)
+    assert r is not None and "Proteggo M" in r and "referencia" in r
+    i = maybe_product_confirmation_reply(decision="answered", graph_output=inherited)
+    assert i is not None and "Proteggo M" in i and "sigo usando" in i
 
 
 def test_effective_similarity_threshold_adjusts_for_graph_fusion_cap() -> None:

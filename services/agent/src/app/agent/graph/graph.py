@@ -62,7 +62,8 @@ class GraphOutput:
 
     Mantenemos campos que el orchestrator ya consume (`retrieved`,
     `top_similarity`, `answer`, `error`) y agregamos los que el grafo
-    aporta (`intent`, `product_id`, `graph_trace`, `ambiguous_candidates`).
+    aporta (`intent`, `product_id`, `product_name`, `graph_trace`,
+    `ambiguous_candidates`).
     """
 
     retrieved: list[HybridChunkHit]
@@ -71,6 +72,7 @@ class GraphOutput:
     citations: list[dict[str, Any]]
     intent: Intent | None
     product_id: UUID | None
+    product_name: str | None
     product_inherited: bool
     ambiguous_candidates: list[ProductCandidate]
     faq_hits: list[FaqHit]
@@ -197,6 +199,7 @@ class GraphPipeline:
             citations=list(final.get("citations") or []),
             intent=final.get("intent"),
             product_id=final.get("product_id"),
+            product_name=final.get("product_name"),
             product_inherited=bool(final.get("product_inherited") or False),
             ambiguous_candidates=list(final.get("ambiguous_candidates") or []),
             faq_hits=list(final.get("faq_hits") or []),

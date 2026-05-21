@@ -6,7 +6,9 @@ Orquesta:
 3. Recupera el system prompt activo.
 4. Ejecuta el pipeline (LCEL clasico o grafo LangGraph segun flag spec 003).
 5. Decide answered / low_confidence / no_match / ambiguous_product.
-6. Persiste mensajes + decision (con graph_trace si aplica) + ticket.
+6. Persiste mensajes + decision (con graph_trace si aplica) + ticket;
+   si hay grafo y respuesta exitosa con producto contextualizado, puede
+   persistir y enviar antes un mensaje corto confirmando ese producto.
 7. Envia la respuesta por WhatsApp (opcional en playground).
 
 Disenado para ser facil de testear: las dependencias se inyectan y todas
@@ -40,6 +42,35 @@ DecisionKind = Literal[
     "answered", "low_confidence", "no_match", "blocked", "error"
 ]
 
+
+def maybe_product_confirmation_reply(
+    *,
+    decision: DecisionKind,
+    graph_output: GraphOutput | None,
+) -> str | None:
+    """Texto corto previo a la respuesta cuando hay producto contextualizado.
+
+    Solo aplica al grafo (salida `GraphOutput`) y cuando la decision final es
+    `answered`: evita confusion si el usuario menciono varios productos o el RTC
+    heredo contexto de turnos previos.
+    """
+
+    if decision != "answered" or graph_output is None:
+        return None
+    product_id = graph_output.product_id
+    label = (graph_output.product_name or "").strip()
+    if product_id is None or not label:
+        return None
+    if graph_output.product_inherited:
+        return (
+            f"Para esta respuesta sigo usando la informacion del producto "
+            f"*{label}*."
+        )
+    return (
+        f"Para esta respuesta tome como referencia el producto *{label}*."
+    )
+
+
 _AMBIGUOUS_PRODUCT_TEMPLATE = (
     "Para responder bien necesito que me confirmes el producto. "
     "Estoy entre: {options}. ¿Cual te interesa?"
@@ -61,6 +92,7 @@ _NOT_AUTHORIZED_MESSAGE = (
     "No estas autorizado para usar este canal. Si crees que es un error, "
     "contacta al equipo de Biomont."
 )
+
 
 def effective_retrieval_similarity_threshold(
     *,
@@ -209,6 +241,7 @@ class AgentOrchestrator:
         )
         prompt_version = active_prompt.version if active_prompt else None
 
+        graph_snapshot: GraphOutput | None = None
         if self._use_graph:
             inherited_product_id = await self._read_inherited_product(
                 conversation_id
@@ -220,6 +253,7 @@ class AgentOrchestrator:
                 conversation_id=conversation_id,
                 inherited_product_id=inherited_product_id,
             )
+            graph_snapshot = graph_output
             adapter = _GraphPipelineAdapter(graph_output)
             output: PipelineOutput = adapter.to_pipeline_output()
             ambiguous = list(graph_output.ambiguous_candidates)
@@ -242,6 +276,20 @@ class AgentOrchestrator:
             text_body=text_body,
             ambiguous_candidates=ambiguous,
         )
+
+        confirmation = maybe_product_confirmation_reply(
+            decision=decision,
+            graph_output=graph_snapshot,
+        )
+
+        if confirmation:
+            await self._conversations.insert_message(
+                conversation_id=conversation_id,
+                role="assistant",
+                content=confirmation,
+                citations=[],
+                latency_ms=None,
+            )
 
         assistant_message_id = await self._conversations.insert_message(
             conversation_id=conversation_id,
@@ -268,7 +316,13 @@ class AgentOrchestrator:
             graph_trace=graph_trace,
         )
 
+        combined_reply_for_client = (
+            f"{confirmation}\n\n{reply_text}" if confirmation else reply_text
+        )
+
         if deliver_whatsapp:
+            if confirmation:
+                await self._send(rtc.phone_e164, confirmation)
             await self._send(rtc.phone_e164, reply_text)
 
         _logger.info(
@@ -286,7 +340,7 @@ class AgentOrchestrator:
         )
         return HandleResult(
             decision=decision,
-            reply_text=reply_text,
+            reply_text=combined_reply_for_client,
             ticket_id=ticket_id,
         )
 
