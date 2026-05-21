@@ -1,6 +1,13 @@
 # Config as code para Railway. En el servicio: Settings → configurar
 # «Railway config file» a /services/backoffice-api/railway.toml
 # El contexto de build debe ser la raíz del repo (Dockerfile copia services/common).
+#
+# Variables recomendadas (servicio backoffice-api, entorno prod):
+# - AGENT_INTERNAL_BASE_URL=https://${{agent.RAILWAY_PUBLIC_DOMAIN}}
+#   (proxy playground → POST …/internal/playground/messages). Alternativa por red privada:
+#   http://agent.railway.internal:<PORT_del_agent> si conocés el PORT que Railway asignó al agent.
+#   Evitar solo ${{agent.PORT}} si la UI no materializa ese valor (URL mal formada).
+# - AGENT_PLAYGROUND_SECRET: mismo valor secreto que en el servicio agent.
 [build]
 watchPatterns = [
   "services/backoffice-api/**",
