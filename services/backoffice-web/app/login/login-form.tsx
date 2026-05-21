@@ -1,5 +1,6 @@
 "use client";
 
+import { Sparkles } from "lucide-react";
 import { useFormStatus } from "react-dom";
 
 import { loginAction } from "./actions";
@@ -9,7 +10,7 @@ function SubmitButton() {
   return (
     <button
       type="submit"
-      className="btn-primary w-full disabled:cursor-wait"
+      className="btn-primary w-full justify-center py-3 text-[15px] disabled:cursor-wait"
       disabled={pending}
       aria-busy={pending}
     >
@@ -22,7 +23,10 @@ function SubmitButton() {
           Entrando…
         </span>
       ) : (
-        "Entrar"
+        <>
+          Entrar al workspace
+          <Sparkles className="h-4 w-4 opacity-90" aria-hidden />
+        </>
       )}
     </button>
   );
@@ -33,7 +37,7 @@ function PendingFieldset({ children }: { children: React.ReactNode }) {
   return (
     <fieldset
       disabled={pending}
-      className="min-w-0 space-y-4 border-0 p-0 disabled:[&_input]:cursor-wait"
+      className="min-w-0 space-y-5 border-0 p-0 disabled:[&_input]:cursor-wait"
     >
       {children}
     </fieldset>
@@ -42,15 +46,25 @@ function PendingFieldset({ children }: { children: React.ReactNode }) {
 
 export function LoginForm({ error }: { error?: string }) {
   return (
-    <form action={loginAction} className="card w-full max-w-md space-y-4">
-      <header>
-        <h1 className="text-2xl font-semibold text-biomont-primary">Biomont</h1>
-        <p className="text-sm text-slate-500">Acceso al backoffice</p>
+    <form
+      action={loginAction}
+      className="relative w-full max-w-[420px] space-y-6 rounded-[28px] border border-white/70 bg-white/75 p-8 shadow-[0_24px_80px_-24px_rgba(15,76,92,0.35)] backdrop-blur-2xl md:p-10"
+    >
+      <header className="space-y-3 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-biomont-primary to-teal-600 text-xl font-bold text-white shadow-lift ring-4 ring-white/80">
+          B
+        </div>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Biomont Ops</h1>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+            Consola AI-native para catálogo, documentos y conversaciones del agente veterinario.
+          </p>
+        </div>
       </header>
       <PendingFieldset>
         <div>
           <label className="form-label" htmlFor="email">
-            Email
+            Email corporativo
           </label>
           <input
             id="email"
@@ -63,7 +77,7 @@ export function LoginForm({ error }: { error?: string }) {
         </div>
         <div>
           <label className="form-label" htmlFor="password">
-            Password
+            Contraseña
           </label>
           <input
             id="password"
@@ -76,11 +90,14 @@ export function LoginForm({ error }: { error?: string }) {
         </div>
       </PendingFieldset>
       {error ? (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-2xl border border-red-200/90 bg-red-50/95 px-4 py-3 text-center text-sm font-medium text-red-900">
           {error}
         </p>
       ) : null}
       <SubmitButton />
+      <p className="text-center text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+        Acceso restringido · uso interno Biomont
+      </p>
     </form>
   );
 }

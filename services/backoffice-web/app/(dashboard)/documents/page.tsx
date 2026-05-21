@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 
+import { ChevronRight, FileText } from "lucide-react";
+
 import { DocumentsDeletedToast } from "@/components/documents-deleted-toast";
 import { DocumentUploadForm } from "@/components/document-upload-form";
 import type { CatalogProduct } from "@/components/product-picker";
@@ -71,60 +73,67 @@ export default async function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <Suspense fallback={null}>
         <DocumentsDeletedToast />
       </Suspense>
       <header className="page-header">
         <h2 className="page-title">Documentos</h2>
         <p className="page-subtitle">
-          Subi un PDF y lo procesamos con docling para alimentar el RAG.
+          Subí un PDF y lo procesamos con Docling para alimentar el RAG del agente con chunks validados.
         </p>
       </header>
 
       <DocumentUploadForm products={products} />
 
-      <div className="table-shell overflow-x-auto">
-        <table className="table-default">
-          <thead>
-            <tr>
-              <th>Titulo</th>
-              <th>Productos (catalogo)</th>
-              <th>Tipo</th>
-              <th>Pais</th>
-              <th>Status</th>
-              <th>Chunks</th>
-              <th>Actualizado</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {documents.map((doc) => (
-              <tr key={doc.id}>
-                <td className="font-medium text-slate-900">{doc.title}</td>
-                <td className="max-w-xs text-sm">{formatLinkedProducts(doc)}</td>
-                <td>
+      <div className="grid gap-4">
+        {documents.map((doc) => (
+          <Link
+            key={doc.id}
+            href={`/documents/${doc.id}`}
+            className="group card-static flex flex-col gap-4 border-white/90 p-6 transition-all duration-300 hover:border-teal-300/45 hover:shadow-lift lg:flex-row lg:items-start lg:justify-between"
+          >
+            <div className="flex min-w-0 flex-1 gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-950 text-white shadow-lg ring-2 ring-white">
+                <FileText className="h-6 w-6 opacity-95" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-semibold tracking-tight text-zinc-900">{doc.title}</h3>
                   <span className="badge-neutral">{formatDocumentKind(doc.kind ?? "bitacora")}</span>
-                </td>
-                <td>{doc.country_iso ?? "GLOBAL"}</td>
-                <td>
-                  <span className="badge-neutral uppercase">{doc.status}</span>
-                </td>
-                <td>{doc.chunk_count}</td>
-                <td className="text-slate-600">{new Date(doc.updated_at).toLocaleString()}</td>
-                <td>
-                  <Link
-                    href={`/documents/${doc.id}`}
-                    className="text-sm font-medium text-biomont-primary hover:underline"
-                  >
-                    Ver detalle
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <span className="badge-neutral font-mono uppercase">{doc.status}</span>
+                </div>
+                <p className="text-sm leading-relaxed text-zinc-600">{formatLinkedProducts(doc)}</p>
+                <div className="flex flex-wrap gap-4 text-xs font-medium text-zinc-500">
+                  <span>
+                    País: <span className="text-zinc-800">{doc.country_iso ?? "GLOBAL"}</span>
+                  </span>
+                  <span className="tabular-nums">
+                    Chunks: <span className="text-zinc-800">{doc.chunk_count}</span>
+                  </span>
+                  <span className="tabular-nums">
+                    Actualizado:{" "}
+                    <span className="text-zinc-800">{new Date(doc.updated_at).toLocaleString()}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 self-start lg:flex-col lg:items-end">
+              <span className="text-sm font-semibold text-teal-700 transition group-hover:text-teal-800">
+                Abrir detalle
+              </span>
+              <ChevronRight className="h-5 w-5 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-teal-600" />
+            </div>
+          </Link>
+        ))}
       </div>
+
+      {documents.length === 0 ? (
+        <div className="rounded-[28px] border border-dashed border-zinc-300/90 bg-white/70 px-8 py-16 text-center backdrop-blur-sm">
+          <p className="text-sm font-semibold text-zinc-700">Todavía no hay documentos</p>
+          <p className="mt-2 text-sm text-zinc-500">Subí el primer PDF para iniciar la ingesta.</p>
+        </div>
+      ) : null}
     </div>
   );
 }

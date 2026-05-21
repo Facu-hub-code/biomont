@@ -4,98 +4,138 @@
 
 :root {
   color-scheme: light;
+  --surface-base: #f4f4f5;
+  --surface-elevated: rgba(255, 255, 255, 0.78);
+  --border-subtle: rgba(24, 24, 27, 0.07);
+  --chat-dot: rgba(161, 161, 170, 0.35);
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+@layer utilities {
+  .chat-thread-bg {
+    background-color: #fafafa;
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      var(--chat-dot) 1px,
+      transparent 0
+    );
+    background-size: 22px 22px;
+  }
+
+  .glass-panel {
+    @apply border border-white/70 bg-white/75 shadow-soft backdrop-blur-xl;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded-xl bg-zinc-200/65;
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-biomont-primary px-4 py-2.5 text-sm font-medium text-white shadow-sm ring-1 ring-biomont-primary/20 transition-all duration-150 hover:bg-biomont-primary/90 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-biomont-primary disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-biomont-primary px-5 py-2.5 text-sm font-semibold text-white shadow-soft ring-1 ring-slate-900/10 transition-all duration-250 hover:brightness-[1.06] hover:shadow-lift hover:-translate-y-px active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-biomont-primary disabled:pointer-events-none disabled:opacity-40 disabled:shadow-none disabled:translate-y-0;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-all duration-150 hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-biomont-primary disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-700 shadow-soft backdrop-blur-sm transition-all duration-250 hover:border-zinc-300 hover:bg-zinc-50 hover:shadow-lift hover:-translate-y-px active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-biomont-primary disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 transition-colors duration-200 hover:bg-zinc-100 hover:text-zinc-900;
   }
 
   .form-input {
-    @apply mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 focus:border-biomont-primary focus:outline-none focus:ring-2 focus:ring-biomont-primary/20;
+    @apply mt-1 block w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm backdrop-blur-sm transition-all duration-200 placeholder:text-zinc-400 focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-teal-100;
   }
 
   .form-label {
-    @apply block text-sm font-medium text-slate-700;
+    @apply block text-sm font-medium text-zinc-600;
   }
 
   .card {
-    @apply rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm;
+    @apply rounded-2xl border border-zinc-200 bg-white/90 p-6 shadow-soft backdrop-blur-xl transition-shadow duration-250 hover:shadow-lift;
+  }
+
+  .card-static {
+    @apply rounded-2xl border border-zinc-200 bg-white/90 p-6 shadow-soft backdrop-blur-xl;
   }
 
   .page-header {
-    @apply space-y-1;
+    @apply space-y-2;
   }
 
   .page-title {
-    @apply text-2xl font-semibold tracking-tight text-slate-900;
+    @apply text-3xl font-semibold tracking-tight text-zinc-900 sm:text-[1.75rem];
   }
 
   .page-subtitle {
-    @apply text-sm text-slate-500;
+    @apply max-w-2xl text-sm leading-relaxed text-zinc-500;
   }
 
   .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
 
   .badge-neutral {
-    @apply badge bg-slate-100 text-slate-700;
+    @apply badge border border-zinc-200 bg-zinc-100 text-zinc-700;
   }
 
   .table-shell {
-    @apply overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm;
+    @apply overflow-hidden rounded-2xl border border-zinc-200 bg-white/90 shadow-soft backdrop-blur-xl;
   }
 
   .table-default {
-    @apply min-w-full divide-y divide-slate-100 text-sm;
+    @apply min-w-full divide-y divide-zinc-100 text-sm;
   }
 
   .table-default thead {
-    @apply bg-slate-50/80;
+    @apply bg-zinc-50;
   }
 
   .table-default th {
-    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500;
+    @apply px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500;
   }
 
   .table-default td {
-    @apply px-4 py-3 text-slate-700;
+    @apply px-4 py-3.5 text-zinc-700;
   }
 
   .table-default tbody tr {
-    @apply transition-colors hover:bg-slate-50/60;
+    @apply transition-colors duration-200 hover:bg-teal-50;
   }
 
   .nav-link {
-    @apply flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors;
+    @apply flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium tracking-tight text-zinc-600 transition-all duration-200;
   }
 
   .nav-link-active {
-    @apply nav-link bg-biomont-primary/10 text-biomont-primary;
+    @apply nav-link bg-teal-50 text-biomont-primary shadow-sm ring-1 ring-teal-200;
   }
 
   .nav-link-inactive {
-    @apply nav-link hover:bg-slate-100 hover:text-slate-900;
+    @apply nav-link hover:bg-zinc-100 hover:text-zinc-900;
   }
 
   .section-nav {
-    @apply sticky top-0 z-10 -mx-1 flex flex-wrap gap-1.5 rounded-xl border border-slate-200/80 bg-white/95 p-2 shadow-sm backdrop-blur-sm;
+    @apply sticky top-0 z-10 -mx-1 flex flex-wrap gap-1.5 rounded-2xl border border-zinc-200 bg-white/95 p-2 shadow-soft backdrop-blur-xl;
   }
 
   .section-nav-link {
-    @apply rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900;
+    @apply rounded-xl px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors duration-200 hover:bg-zinc-100 hover:text-zinc-900;
   }
 
   .section-nav-link-active {
-    @apply section-nav-link bg-biomont-primary/10 text-biomont-primary;
+    @apply section-nav-link bg-teal-50 text-biomont-primary ring-1 ring-teal-200;
+  }
+
+  .filter-chip {
+    @apply rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold capitalize text-zinc-600 shadow-sm transition-all duration-200 hover:border-teal-200 hover:bg-teal-50 hover:text-biomont-primary;
+  }
+
+  .filter-chip-active {
+    @apply border-teal-300 bg-teal-50 text-biomont-primary ring-1 ring-teal-200;
   }
 }
