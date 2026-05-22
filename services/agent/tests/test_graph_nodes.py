@@ -11,7 +11,7 @@ import uuid
 import pytest
 
 from biomont_common.schemas.agent_graph import Intent, IntentClassification
-from biomont_common.schemas.knowledge import DocumentKind
+from biomont_common.schemas.knowledge import DocumentKind, FaqHit
 from biomont_common.schemas.products import ProductCandidate
 
 from app.agent.graph.nodes.faq_retriever import FaqRetrieverNode
@@ -150,6 +150,42 @@ async def test_meta_filter_maps_intent_to_kinds():
         state = {"intent": intent, "trace": []}
         updates = await node(state)
         assert updates["filter_kinds"] == expected, (intent, expected)
+
+
+@pytest.mark.asyncio
+async def test_meta_filter_full_corpus_uses_all_kinds_irrespective_of_intent():
+    """RAG_FULL_CORPUS_FOR_ALL_INTENTS debe exponer todos los tipos chunk al hibrido."""
+
+    node = MetaFilterNode(full_corpus_for_all_intents=True)
+    expected_kinds = set(DocumentKind)
+    for intent in (Intent.faq, Intent.dosage_question, Intent.chitchat):
+        state = {"intent": intent, "trace": []}
+        updates = await node(state)
+        assert set(updates["filter_kinds"] or []) == expected_kinds, intent
+
+
+@pytest.mark.asyncio
+async def test_faq_retriever_full_corpus_runs_when_intent_is_not_faq_like():
+    hit = FaqHit(
+        faq_id=uuid.uuid4(),
+        product_id=None,
+        document_id=uuid.uuid4(),
+        question="Q",
+        answer="A",
+        final_score=0.5,
+    )
+    repo = FakeFaqRepository(hits=[hit])
+    embeddings = FakeEmbeddings()
+    node = FaqRetrieverNode(
+        repository=repo,
+        embeddings=embeddings,
+        vector_weight=0.7,
+        bm25_weight=0.3,
+        full_corpus_for_all_intents=True,
+    )
+    state = {"intent": Intent.dosage_question, "trace": [], "query": "x"}
+    updates = await node(state)
+    assert updates["faq_hits"] == [hit]
 
 
 @pytest.mark.asyncio

@@ -102,13 +102,16 @@ def build_graph(
             threshold=cfg.product_resolver_threshold,
             margin=cfg.product_resolver_margin,
         ),
-        "MetaFilter": MetaFilterNode(),
+        "MetaFilter": MetaFilterNode(
+            full_corpus_for_all_intents=cfg.full_corpus_for_all_intents,
+        ),
         "FAQRetriever": FaqRetrieverNode(
             repository=faq_repository,
             embeddings=embeddings,
             vector_weight=cfg.vector_weight,
             bm25_weight=cfg.bm25_weight,
             direct_threshold=cfg.faq_direct_threshold,
+            full_corpus_for_all_intents=cfg.full_corpus_for_all_intents,
         ),
         "HybridRetriever": HybridRetrieverNode(
             repository=rag_repository,

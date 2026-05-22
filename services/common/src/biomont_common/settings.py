@@ -93,6 +93,13 @@ class RagSettings(BaseSettings):
     # LCEL viejo contra document_chunks (camino de rollback).
     agent_use_graph: bool = Field(True, alias="AGENT_USE_GRAPH")
 
+    # Dev / QA / prueba manual del agente: ignora filtros de tipo de documento y de
+    # FAQ por intent. El hibrido busca sobre todos los DocumentKind y el FAQ retriever
+    # corre para cualquier intención.
+    full_corpus_for_all_intents: bool = Field(
+        False, alias="RAG_FULL_CORPUS_FOR_ALL_INTENTS"
+    )
+
     # Tamaño de fragmentos `knowledge_chunks` (StructuredMarkdownChunker).
     # Subir mejora contexto por chunk; bajar acota costo de embedding / ruido BM25.
     # Requiere reingesta para aplicar a documentos ya cargados.
@@ -104,6 +111,7 @@ class RagSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
+        populate_by_name=True,
     )
 
 

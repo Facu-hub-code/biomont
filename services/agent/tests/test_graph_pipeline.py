@@ -19,6 +19,7 @@ from biomont_common.schemas.knowledge import DocumentKind, FaqHit
 from biomont_common.schemas.products import ProductCandidate
 from biomont_common.schemas.rag import RagAnswer
 
+from biomont_common.settings import RagSettings
 from app.agent.graph.graph import build_graph
 
 from tests.conftest import (
@@ -171,6 +172,58 @@ async def test_graph_full_path_dosage_question(fake_hybrid_chunks):
     # MetaFilter aplica kinds para dosage_question.
     assert rag_repo.last_call["kinds"]
     assert DocumentKind.bitacora in rag_repo.last_call["kinds"]
+
+
+@pytest.mark.asyncio
+async def test_graph_dosage_includes_balotario_when_full_corpus_flag(
+    fake_hybrid_chunks,
+):
+    """full_corpus_for_all_intents fuerza retrieval sobre todos los tipos de chunk."""
+
+    product_id = uuid.uuid4()
+    product_repo = FakeProductRepository(
+        candidates=[
+            ProductCandidate(
+                product_id=product_id,
+                product_name="Proteggo 3M",
+                alias_matched="proteggo 3m",
+                similarity=0.95,
+            )
+        ]
+    )
+    rag_repo = FakeHybridRagRepository(hits=fake_hybrid_chunks)
+    faq_repo = FakeFaqRepository(hits=[])
+    state_repo = FakeConversationStateRepository()
+    rag_answer = RagAnswer(
+        answer="x",
+        citations=[
+            {
+                "document_id": str(fake_hybrid_chunks[0].document_id),
+                "document_title": "x",
+                "similarity": 0.88,
+            }
+        ],
+    )
+    cfg = RagSettings(full_corpus_for_all_intents=True)
+    pipeline = build_graph(
+        rag_repository=rag_repo,
+        product_repository=product_repo,
+        faq_repository=faq_repo,
+        state_repository=state_repo,
+        embeddings=FakeEmbeddings(),
+        chat_model=_FakeChatModel(
+            intent=Intent.dosage_question, answer=rag_answer
+        ),
+        settings=cfg,
+    )
+    await pipeline.run(
+        query="dosis del proteggo 3m?",
+        allowed_countries=["PE"],
+        system_prompt="Sos asistente",
+        conversation_id=uuid.uuid4(),
+    )
+    kinds = rag_repo.last_call["kinds"] if rag_repo.last_call else []
+    assert DocumentKind.balotario in kinds
 
 
 @pytest.mark.asyncio

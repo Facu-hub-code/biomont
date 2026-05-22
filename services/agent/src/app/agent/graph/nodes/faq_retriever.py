@@ -24,6 +24,8 @@ class FaqRetrieverNode:
     bm25_weight: float
     direct_threshold: float = 0.80
     top_k: int = 3
+    #: Si True, consulta FAQ para cualquier intent (útiles para prueba del corpus completo).
+    full_corpus_for_all_intents: bool = False
 
     async def __call__(self, state: dict) -> dict:
         intent = state.get("intent")
@@ -32,7 +34,10 @@ class FaqRetrieverNode:
         with trace_node(updates, node="FAQRetriever") as result:
             # Si el intent es claramente otro, no toco el FAQ retrieval para
             # no introducir respuestas canonicas fuera de contexto.
-            if intent not in (Intent.faq, Intent.safety_question):
+            if (
+                not self.full_corpus_for_all_intents
+                and intent not in (Intent.faq, Intent.safety_question)
+            ):
                 result["outcome"] = "skipped"
                 return updates
 
