@@ -378,9 +378,19 @@ class AgentOrchestrator:
 
         # Epsilon: mismatches float32->float64 al serializar scores de PG.
         epsilon = 1e-5
+        # FAQ direct hit: el grafo responde sin pasar por HybridRetriever, asi que
+        # `retrieved` queda vacio aunque ya haya respuesta canonica + citations.
+        faq_short_circuit = (
+            output.answer is not None
+            and bool(output.answer.citations)
+            and not output.retrieved
+        )
         weak_retrieval = (
-            not output.retrieved
-            or output.top_similarity < gate - epsilon
+            not faq_short_circuit
+            and (
+                not output.retrieved
+                or output.top_similarity < gate - epsilon
+            )
         )
 
         if weak_retrieval:

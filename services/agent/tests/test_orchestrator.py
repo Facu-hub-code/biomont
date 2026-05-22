@@ -6,9 +6,10 @@ import uuid
 
 import pytest
 
+from biomont_common.schemas.knowledge import FaqHit
 from biomont_common.schemas.rag import RagAnswer, RetrievedChunk
 
-from app.agent.graph.graph import GraphOutput
+from app.agent.graph.graph import GraphOutput, GraphPipeline
 from app.agent.orchestrator import (
     AgentOrchestrator,
     _render_answer,
@@ -35,6 +36,36 @@ class _StaticPipeline:
 
     async def run(self, **_kwargs) -> PipelineOutput:
         return self._output
+
+
+class _StaticGraphPipeline(GraphPipeline):
+    """Grafo fake que devuelve un GraphOutput prearmado (spec 003)."""
+
+    def __init__(self, output: GraphOutput) -> None:
+        super().__init__(compiled=object())
+        self._output = output
+
+    async def run(self, **_kwargs) -> GraphOutput:
+        return self._output
+
+
+def _build_graph_orchestrator(*, graph_output: GraphOutput, rtc_user: FakeRtcUser):
+    rtc_users = {rtc_user.phone_e164: rtc_user}
+    conv = FakeConversationRepository()
+    return (
+        AgentOrchestrator(
+            rtc_repository=FakeRtcRepository(rtc_users),  # type: ignore[arg-type]
+            conversation_repository=conv,  # type: ignore[arg-type]
+            system_prompt_repository=FakeSystemPromptRepository(
+                FakeActivePrompt(version=1, content="System prompt v1.")
+            ),  # type: ignore[arg-type]
+            pipeline=_StaticGraphPipeline(graph_output),  # type: ignore[arg-type]
+            whatsapp_client=FakeWhatsAppClient(),  # type: ignore[arg-type]
+            similarity_threshold=0.75,
+            rag_vector_weight=0.7,
+        ),
+        conv,
+    )
 
 
 def _build_orchestrator(*, pipeline_output: PipelineOutput, rtc_user: FakeRtcUser | None):
@@ -163,6 +194,75 @@ async def test_orchestrator_blocks_unauthorized_phone() -> None:
     assert any(d["decision"] == "blocked" for d in conv.decisions)
     assert conv.messages == []
     assert conv.tickets == []
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_faq_direct_hit_answered_without_retrieved_chunks(
+    fake_rtc_user,
+) -> None:
+    doc_id = uuid.uuid4()
+    answer = RagAnswer(
+        answer="Si, es posible utilizarlo para micoplasmosis felina.",
+        citations=[
+            {
+                "document_id": str(doc_id),
+                "document_title": "FAQ",
+                "similarity": 1.0,
+            }
+        ],
+    )
+    output = PipelineOutput(
+        retrieved=[],
+        top_similarity=1.0,
+        answer=answer,
+        raw_answer_text=answer.answer,
+    )
+    orchestrator, conv = _build_orchestrator(
+        pipeline_output=output, rtc_user=fake_rtc_user
+    )
+
+    result = await orchestrator.handle_playground_message(
+        rtc_user_id=fake_rtc_user.id,
+        text_body="Puede usarse MARVO 20 para micoplasmosis en gatos?",
+    )
+
+    assert result.decision == "answered"
+    assert conv.tickets == []
+    assert "micoplasmosis felina" in result.reply_text
+    assert "FAQ" in result.reply_text
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_graph_faq_direct_hit_answered(fake_rtc_user) -> None:
+    doc_id = uuid.uuid4()
+    canonical = "Si, es posible utilizarlo para micoplasmosis felina."
+    graph_output = _graph_output_stub(
+        retrieved=[],
+        top_similarity=0.0,
+        faq_hits=[
+            FaqHit(
+                faq_id=uuid.uuid4(),
+                product_id=None,
+                document_id=doc_id,
+                question="Puede usarse marvofloxacino para micoplasmosis en gatos?",
+                answer=canonical,
+                final_score=1.0,
+            )
+        ],
+        faq_direct_answer=canonical,
+    )
+    orchestrator, conv = _build_graph_orchestrator(
+        graph_output=graph_output, rtc_user=fake_rtc_user
+    )
+
+    result = await orchestrator.handle_playground_message(
+        rtc_user_id=fake_rtc_user.id,
+        text_body="Puede usarse MARVO 20 para micoplasmosis en gatos?",
+    )
+
+    assert result.decision == "answered"
+    assert conv.tickets == []
+    assert canonical in result.reply_text
 
 
 @pytest.mark.asyncio
