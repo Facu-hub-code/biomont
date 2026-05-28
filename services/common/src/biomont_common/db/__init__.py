@@ -13,7 +13,6 @@ from biomont_common.db.agent_decision_repository import (
     AgentDecisionListRow,
     AgentDecisionRepository,
 )
-from biomont_common.db.faq_repository import FaqInput, FaqRepository
 from biomont_common.db.pool import (
     DatabasePool,
     create_pool,
@@ -33,8 +32,6 @@ __all__ = [
     "DocumentProductRepository",
     "LinkedDocumentRow",
     "LinkedProductRow",
-    "FaqInput",
-    "FaqRepository",
     "ProductRepository",
     "create_pool",
     "normalize_text",

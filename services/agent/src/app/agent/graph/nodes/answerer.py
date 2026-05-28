@@ -1,8 +1,4 @@
-"""Answerer (spec 003): LLM con structured output sobre chunks recuperados.
-
-Conserva el contrato de `RagAnswer` (`citations` requerido). Forma del
-prompt similar al pipeline LCEL viejo para mantener calidad ya validada.
-"""
+"""Answerer (spec 003): LLM con structured output sobre chunks recuperados."""
 
 from __future__ import annotations
 
@@ -43,24 +39,6 @@ class AnswererNode:
     async def __call__(self, state: dict) -> dict:
         updates: dict = {"answer_text": None, "citations": [], "error": None}
         with trace_node(updates, node="Answerer") as result:
-            faq_direct = state.get("faq_direct_answer")
-            if faq_direct:
-                hits = state.get("faq_hits") or []
-                citations: list[dict] = []
-                if hits:
-                    top = hits[0]
-                    citations.append(
-                        {
-                            "document_id": str(top.document_id),
-                            "document_title": "FAQ",
-                            "similarity": top.final_score,
-                        }
-                    )
-                result["outcome"] = "faq_direct"
-                updates["answer_text"] = faq_direct
-                updates["citations"] = citations
-                return updates
-
             retrieved: list[HybridChunkHit] = state.get("retrieved") or []
             if not retrieved:
                 result["outcome"] = "no_context"

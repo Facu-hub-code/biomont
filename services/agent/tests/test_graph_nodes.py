@@ -1,8 +1,4 @@
-"""Tests unitarios de los nodos del grafo (spec 003).
-
-No instancian Postgres: usan los fakes de `conftest.py` para verificar
-la logica de routing condicional.
-"""
+"""Tests unitarios de los nodos del grafo (spec 003/007)."""
 
 from __future__ import annotations
 
@@ -11,10 +7,9 @@ import uuid
 import pytest
 
 from biomont_common.schemas.agent_graph import Intent, IntentClassification
-from biomont_common.schemas.knowledge import DocumentKind, FaqHit
+from biomont_common.schemas.knowledge import DocumentKind
 from biomont_common.schemas.products import ProductCandidate
 
-from app.agent.graph.nodes.faq_retriever import FaqRetrieverNode
 from app.agent.graph.nodes.hybrid_retriever import HybridRetrieverNode
 from app.agent.graph.nodes.intent_classifier import (
     apply_intent_lexical_calibration,
@@ -26,7 +21,6 @@ from app.agent.graph.nodes.state_updater import StateUpdaterNode
 from tests.conftest import (
     FakeConversationStateRepository,
     FakeEmbeddings,
-    FakeFaqRepository,
     FakeHybridRagRepository,
     FakeProductRepository,
 )
@@ -130,11 +124,14 @@ async def test_product_resolver_inherits_from_conversation_state():
 async def test_meta_filter_maps_intent_to_kinds():
     node = MetaFilterNode()
     cases = [
-        (Intent.faq, [DocumentKind.balotario]),
-        (Intent.clinical_protocol, [DocumentKind.bitacora]),
+        (Intent.clinical_protocol, [DocumentKind.bitacora, DocumentKind.balotario]),
         (
             Intent.dosage_question,
-            [DocumentKind.bitacora, DocumentKind.ficha_tecnica],
+            [
+                DocumentKind.bitacora,
+                DocumentKind.ficha_tecnica,
+                DocumentKind.balotario,
+            ],
         ),
         (
             Intent.safety_question,
@@ -154,54 +151,12 @@ async def test_meta_filter_maps_intent_to_kinds():
 
 @pytest.mark.asyncio
 async def test_meta_filter_full_corpus_uses_all_kinds_irrespective_of_intent():
-    """RAG_FULL_CORPUS_FOR_ALL_INTENTS debe exponer todos los tipos chunk al hibrido."""
-
     node = MetaFilterNode(full_corpus_for_all_intents=True)
     expected_kinds = set(DocumentKind)
-    for intent in (Intent.faq, Intent.dosage_question, Intent.chitchat):
+    for intent in (Intent.dosage_question, Intent.safety_question, Intent.chitchat):
         state = {"intent": intent, "trace": []}
         updates = await node(state)
         assert set(updates["filter_kinds"] or []) == expected_kinds, intent
-
-
-@pytest.mark.asyncio
-async def test_faq_retriever_full_corpus_runs_when_intent_is_not_faq_like():
-    hit = FaqHit(
-        faq_id=uuid.uuid4(),
-        product_id=None,
-        document_id=uuid.uuid4(),
-        question="Q",
-        answer="A",
-        final_score=0.5,
-    )
-    repo = FakeFaqRepository(hits=[hit])
-    embeddings = FakeEmbeddings()
-    node = FaqRetrieverNode(
-        repository=repo,
-        embeddings=embeddings,
-        vector_weight=0.7,
-        bm25_weight=0.3,
-        full_corpus_for_all_intents=True,
-    )
-    state = {"intent": Intent.dosage_question, "trace": [], "query": "x"}
-    updates = await node(state)
-    assert updates["faq_hits"] == [hit]
-
-
-@pytest.mark.asyncio
-async def test_faq_retriever_skips_when_intent_irrelevant():
-    repo = FakeFaqRepository(hits=[])
-    embeddings = FakeEmbeddings()
-    node = FaqRetrieverNode(
-        repository=repo,
-        embeddings=embeddings,
-        vector_weight=0.7,
-        bm25_weight=0.3,
-    )
-    state = {"intent": Intent.dosage_question, "trace": [], "query": "x"}
-    updates = await node(state)
-    assert updates["faq_hits"] == []
-    assert updates["faq_direct_answer"] is None
 
 
 @pytest.mark.asyncio
@@ -250,18 +205,10 @@ async def test_state_updater_persists_state():
     assert repo.state_by_conv[conv]["last_intent"] == "dosage_question"
 
 
-def test_intent_calibration_moves_adversos_from_faq_to_safety() -> None:
-    baseline = IntentClassification(intent=Intent.faq, confidence=0.9)
+def test_intent_calibration_moves_adversos_from_dosage_to_safety() -> None:
+    baseline = IntentClassification(intent=Intent.dosage_question, confidence=0.9)
     calibrated = apply_intent_lexical_calibration(
         baseline, "Cuales son los efectos adversos del protego"
     )
     assert calibrated.intent == Intent.safety_question
     assert calibrated.confidence >= 0.88
-
-
-def test_intent_calibration_keeps_gestacion_in_faq() -> None:
-    baseline = IntentClassification(intent=Intent.safety_question, confidence=1.0)
-    calibrated = apply_intent_lexical_calibration(
-        baseline, "Puede usarse en gestacion?"
-    )
-    assert calibrated.intent == Intent.faq

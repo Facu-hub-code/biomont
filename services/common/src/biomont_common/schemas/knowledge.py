@@ -1,4 +1,4 @@
-"""Knowledge chunks, FAQ, document kinds (spec 003)."""
+"""Knowledge chunks y document kinds (spec 003)."""
 
 from __future__ import annotations
 
@@ -33,11 +33,3 @@ class HybridChunkHit(BaseModel):
     final_score: float = Field(ge=0.0, le=1.0)
     metadata: dict = Field(default_factory=dict)
 
-
-class FaqHit(BaseModel):
-    faq_id: UUID
-    product_id: UUID | None = None
-    document_id: UUID
-    question: str
-    answer: str
-    final_score: float = Field(ge=0.0, le=1.0)

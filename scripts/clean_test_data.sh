@@ -83,10 +83,8 @@ UNION ALL SELECT 'conversation_state', count(*)::text FROM public.conversation_s
 UNION ALL SELECT 'agent_decisions', count(*)::text FROM public.agent_decisions
 UNION ALL SELECT 'tickets', count(*)::text FROM public.tickets
 UNION ALL SELECT 'documents', count(*)::text FROM public.documents
-UNION ALL SELECT 'document_chunks (legacy)', count(*)::text FROM public.document_chunks
 UNION ALL SELECT 'document_sections', count(*)::text FROM public.document_sections
 UNION ALL SELECT 'knowledge_chunks', count(*)::text FROM public.knowledge_chunks
-UNION ALL SELECT 'faq_entries', count(*)::text FROM public.faq_entries
 UNION ALL SELECT 'document_products', count(*)::text FROM public.document_products
 UNION ALL SELECT 'products', count(*)::text FROM public.products
 UNION ALL SELECT 'product_aliases', count(*)::text FROM public.product_aliases

@@ -15,7 +15,6 @@ from biomont_common.db.conversation_repository import ConversationRepository
 from biomont_common.db.conversation_state_repository import (
     ConversationStateRepository,
 )
-from biomont_common.db.faq_repository import FaqRepository
 from biomont_common.db.pool import create_pool
 from biomont_common.db.product_repository import ProductRepository
 from biomont_common.db.rag_repository import RagRepository
@@ -30,7 +29,6 @@ from biomont_common.settings import get_rag_settings
 
 from app.agent.graph.graph import build_graph
 from app.agent.orchestrator import AgentOrchestrator
-from app.agent.rag_pipeline import RagPipeline
 from app.api.health_router import router as health_router
 from app.api.playground_router import router as playground_router
 from app.api.whatsapp_router import router as whatsapp_router
@@ -78,36 +76,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     rag_settings = get_rag_settings()
     product_repo = ProductRepository(pool)
-    faq_repo = FaqRepository(pool)
     state_repo = ConversationStateRepository(pool)
 
-    if rag_settings.agent_use_graph:
-        pipeline = build_graph(
-            rag_repository=rag,
-            product_repository=product_repo,
-            faq_repository=faq_repo,
-            state_repository=state_repo,
-            embeddings=embeddings,
-            chat_model=chat_model,
-            settings=rag_settings,
-        )
-        logger.info(
-            "agent_pipeline_selected",
-            action="pipeline_init",
-            pipeline="graph",
-        )
-    else:
-        pipeline = RagPipeline(
-            rag=rag,
-            embeddings=embeddings,
-            chat_model=chat_model,
-            top_k=agent_settings.top_k,
-        )
-        logger.info(
-            "agent_pipeline_selected",
-            action="pipeline_init",
-            pipeline="lcel",
-        )
+    pipeline = build_graph(
+        rag_repository=rag,
+        product_repository=product_repo,
+        state_repository=state_repo,
+        embeddings=embeddings,
+        chat_model=chat_model,
+        settings=rag_settings,
+    )
+    logger.info(
+        "agent_pipeline_selected",
+        action="pipeline_init",
+        pipeline="graph",
+    )
 
     orchestrator = AgentOrchestrator(
         rtc_repository=rtc_repo,
@@ -117,9 +100,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         pipeline=pipeline,
         whatsapp_client=whatsapp_client,
         similarity_threshold=agent_settings.similarity_threshold,
-        rag_vector_weight=(
-            rag_settings.vector_weight if rag_settings.agent_use_graph else None
-        ),
+        rag_vector_weight=rag_settings.vector_weight,
     )
     app.state.orchestrator = orchestrator
     logger.info("startup_complete", action="startup")

@@ -28,10 +28,8 @@ def trace_node(
     Uso:
         async def __call__(self, state):
             updates = {}
-            with trace_node(updates, node='FAQRetriever') as result:
-                # ... logica ...
-                result['outcome'] = 'direct_hit'
-                updates['faq_hits'] = hits
+            with trace_node(updates, node='HybridRetriever') as result:
+                result['outcome'] = 'retrieved'
             return updates
     """
 

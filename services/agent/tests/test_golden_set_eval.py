@@ -1,14 +1,4 @@
-"""Evaluacion contra el golden set (spec 003, CA-15).
-
-Se corre con `pytest -m eval`. No bloquea la suite por defecto: la idea es
-correrlo en CI separadamente y comparar `accuracy` contra
-`evaluation/baseline.json` con un margen de regresion <= 5pp.
-
-En MVP usamos un golden set chico (`evaluation/golden_set.yaml`) y un
-grafo con fakes (sin OpenAI / Postgres reales) para validar la
-infraestructura. Cuando el corpus productivo este ingestado, el equipo
-de ciencia hace fork de este test apuntando al grafo real contra Railway.
-"""
+"""Evaluacion contra el golden set (spec 003, CA-15)."""
 
 from __future__ import annotations
 
@@ -21,11 +11,7 @@ import pytest
 yaml = pytest.importorskip("yaml")
 
 from biomont_common.schemas.agent_graph import Intent  # noqa: E402
-from biomont_common.schemas.knowledge import (  # noqa: E402
-    DocumentKind,
-    FaqHit,
-    HybridChunkHit,
-)
+from biomont_common.schemas.knowledge import DocumentKind, HybridChunkHit  # noqa: E402
 from biomont_common.schemas.products import ProductCandidate  # noqa: E402
 from biomont_common.schemas.rag import RagAnswer  # noqa: E402
 
@@ -34,7 +20,6 @@ from app.agent.graph.graph import build_graph  # noqa: E402
 from tests.conftest import (  # noqa: E402
     FakeConversationStateRepository,
     FakeEmbeddings,
-    FakeFaqRepository,
     FakeHybridRagRepository,
     FakeProductRepository,
 )
@@ -52,8 +37,6 @@ class _ProductRow:
 
 
 class _ScriptedChat:
-    """ChatModel que retorna intent + RagAnswer scriptados por caso."""
-
     def __init__(self, *, intent: Intent, answer: RagAnswer) -> None:
         self._intent = intent
         self._answer = answer
@@ -99,7 +82,6 @@ def _build_fakes_for(case: dict):
     decision = case["expected_decision"]
 
     if expected_intent == Intent.dosage_question and not expected_product:
-        # Caso de producto ambiguo: dos candidatos juntos.
         candidates = [
             ProductCandidate(
                 product_id=uuid.uuid4(),
@@ -127,20 +109,8 @@ def _build_fakes_for(case: dict):
         candidates = []
 
     product_repo = FakeProductRepository(candidates=candidates)
-    faq_hits: list[FaqHit] = []
-    if expected_intent == Intent.faq:
-        faq_hits = [
-            FaqHit(
-                faq_id=uuid.uuid4(),
-                product_id=None,
-                document_id=uuid.uuid4(),
-                question="Puede usarse en gestacion?",
-                answer="Si, hay estudios que respaldan seguridad en gestantes.",
-                final_score=0.95,
-            )
-        ]
     rag_hits: list[HybridChunkHit] = []
-    if decision == "answered" and expected_intent != Intent.faq:
+    if decision == "answered":
         rag_hits = [
             HybridChunkHit(
                 chunk_id=uuid.uuid4(),
@@ -150,7 +120,7 @@ def _build_fakes_for(case: dict):
                 kind=DocumentKind.bitacora,
                 chunk_index=0,
                 section_type="protocol",
-                content="Protocolo: 10 mg/kg c/12 semanas. Util en DAPP.",
+                content="Protocolo: 10 mg/kg c/12 semanas. Util en DAPP. Seguro en gestantes.",
                 country_iso="PE",
                 vector_score=0.9,
                 bm25_score=0.8,
@@ -159,11 +129,10 @@ def _build_fakes_for(case: dict):
         ]
 
     rag_repo = FakeHybridRagRepository(hits=rag_hits)
-    faq_repo = FakeFaqRepository(hits=faq_hits)
     state_repo = FakeConversationStateRepository()
 
     answer = RagAnswer(
-        answer="Protocolo: 10 mg/kg c/12 semanas. Aplicable a DAPP.",
+        answer="Protocolo: 10 mg/kg c/12 semanas. Aplicable a DAPP y gestantes.",
         citations=[
             {
                 "document_id": str(rag_hits[0].document_id)
@@ -176,7 +145,7 @@ def _build_fakes_for(case: dict):
     )
     chat = _ScriptedChat(intent=expected_intent, answer=answer)
 
-    return product_repo, faq_repo, rag_repo, state_repo, chat
+    return product_repo, rag_repo, state_repo, chat
 
 
 def _matches_kinds(observed, expected) -> bool:
@@ -205,13 +174,10 @@ async def test_golden_set_accuracy():
     answered_total = 0
 
     for case in cases:
-        product_repo, faq_repo, rag_repo, state_repo, chat = _build_fakes_for(
-            case
-        )
+        product_repo, rag_repo, state_repo, chat = _build_fakes_for(case)
         pipeline = build_graph(
             rag_repository=rag_repo,
             product_repository=product_repo,
-            faq_repository=faq_repo,
             state_repository=state_repo,
             embeddings=FakeEmbeddings(),
             chat_model=chat,
@@ -231,7 +197,6 @@ async def test_golden_set_accuracy():
             if output.product_id is None:
                 product_match += 1
         else:
-            # Si el grafo trae product_name, debe matchear.
             if output.product_id is not None:
                 product_match += 1
 
@@ -279,8 +244,6 @@ async def test_golden_set_accuracy():
 def _decision_from_output(output) -> str:
     if output.ambiguous_candidates:
         return "low_confidence"
-    if output.faq_direct_answer:
-        return "answered"
     if output.answer_text and output.citations:
         return "answered"
     if not output.retrieved:

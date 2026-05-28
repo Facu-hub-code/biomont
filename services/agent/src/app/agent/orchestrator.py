@@ -1,18 +1,7 @@
 """Caso de uso principal del agente.
 
-Orquesta:
-1. Lookup del RTC en `rtc_users`.
-2. Gate de autorizacion + envio del mensaje "no autorizado" si falla.
-3. Recupera el system prompt activo.
-4. Ejecuta el pipeline (LCEL clasico o grafo LangGraph segun flag spec 003).
-5. Decide answered / low_confidence / no_match / ambiguous_product.
-6. Persiste mensajes + decision (con graph_trace si aplica) + ticket;
-   si hay grafo y respuesta exitosa con producto contextualizado, puede
-   persistir y enviar antes un mensaje corto confirmando ese producto.
-7. Envia la respuesta por WhatsApp (opcional en playground).
-
-Disenado para ser facil de testear: las dependencias se inyectan y todas
-las llamadas externas estan abstraidas.
+Orquesta lookup del RTC, ejecucion del grafo LangGraph, decision de
+respuesta y persistencia de mensajes/decisiones/tickets.
 """
 
 from __future__ import annotations
@@ -29,10 +18,9 @@ from biomont_common.db.conversation_state_repository import (
 from biomont_common.db.rtc_repository import RtcRepository, RtcUser
 from biomont_common.db.system_prompt_repository import SystemPromptRepository
 from biomont_common.logging import get_logger
-from biomont_common.schemas.rag import Citation, RagAnswer
+from biomont_common.schemas.rag import Citation, RagAnswer, RetrievedChunk
 
 from app.agent.graph.graph import GraphOutput, GraphPipeline
-from app.agent.rag_pipeline import PipelineOutput, RagPipeline
 from app.integrations.whatsapp_client import WhatsAppClient
 
 _logger = get_logger("agent.orchestrator")
@@ -43,18 +31,20 @@ DecisionKind = Literal[
 ]
 
 
+@dataclass(slots=True)
+class PipelineOutput:
+    retrieved: list[RetrievedChunk]
+    top_similarity: float
+    answer: RagAnswer | None
+    raw_answer_text: str | None
+    error: str | None = None
+
+
 def maybe_product_confirmation_reply(
     *,
     decision: DecisionKind,
     graph_output: GraphOutput | None,
 ) -> str | None:
-    """Texto corto previo a la respuesta cuando hay producto contextualizado.
-
-    Solo aplica al grafo (salida `GraphOutput`) y cuando la decision final es
-    `answered`: evita confusion si el usuario menciono varios productos o el RTC
-    heredo contexto de turnos previos.
-    """
-
     if decision != "answered" or graph_output is None:
         return None
     product_id = graph_output.product_id
@@ -97,26 +87,11 @@ _NOT_AUTHORIZED_MESSAGE = (
 def effective_retrieval_similarity_threshold(
     *,
     configured_threshold: float,
-    pipeline_uses_graph: bool,
     rag_vector_weight: float | None,
 ) -> float:
-    """Umbral efectivo vs `PipelineOutput.top_similarity`.
+    """Umbral efectivo vs score fusionado vec+BM25 del grafo."""
 
-    En el grafo hibrido, `top_similarity` es el score fusion vec+BM25 min-max dentro
-    de los candidatos. Si BM25 no rankea ningun chunk del conjunto seleccionado
-    por embedding, cada fila llega solo con score vector normalizado y la fusion
-    queda capped aprox en `rag_vector_weight` (ej. 0.7 con RAG_VECTOR_WEIGHT=0.7).
-    Comparar tal valor contra AGENT_SIMILARITY_THRESHOLD clasico(~coseno 0...1 en
-    0.75+) produce falsos negativos: hay contexto recuperado pero se dispara ticket.
-    Por eso cuando el grafo esta activo ajustamos el umbral efectivo como
-    `min(configurado, vector_weight)` (si viene `rag_vector_weight`).
-    """
-
-    if (
-        pipeline_uses_graph
-        and rag_vector_weight is not None
-        and rag_vector_weight > 0
-    ):
+    if rag_vector_weight is not None and rag_vector_weight > 0:
         return min(float(configured_threshold), float(rag_vector_weight))
     return float(configured_threshold)
 
@@ -140,7 +115,7 @@ class AgentOrchestrator:
         rtc_repository: RtcRepository,
         conversation_repository: ConversationRepository,
         system_prompt_repository: SystemPromptRepository,
-        pipeline: "RagPipeline | GraphPipeline",
+        pipeline: GraphPipeline,
         whatsapp_client: WhatsAppClient,
         similarity_threshold: float,
         conversation_state_repository: ConversationStateRepository | None = None,
@@ -153,7 +128,6 @@ class AgentOrchestrator:
         self._whatsapp = whatsapp_client
         self._threshold = similarity_threshold
         self._state_repo = conversation_state_repository
-        self._use_graph = isinstance(pipeline, GraphPipeline)
         self._rag_vector_weight = rag_vector_weight
 
     async def handle_incoming_message(
@@ -241,31 +215,17 @@ class AgentOrchestrator:
         )
         prompt_version = active_prompt.version if active_prompt else None
 
-        graph_snapshot: GraphOutput | None = None
-        if self._use_graph:
-            inherited_product_id = await self._read_inherited_product(
-                conversation_id
-            )
-            graph_output: GraphOutput = await self._pipeline.run(  # type: ignore[union-attr]
-                query=text_body,
-                allowed_countries=rtc.countries,
-                system_prompt=system_prompt,
-                conversation_id=conversation_id,
-                inherited_product_id=inherited_product_id,
-            )
-            graph_snapshot = graph_output
-            adapter = _GraphPipelineAdapter(graph_output)
-            output: PipelineOutput = adapter.to_pipeline_output()
-            ambiguous = list(graph_output.ambiguous_candidates)
-            graph_trace = [t.model_dump(mode="json") for t in graph_output.graph_trace]
-        else:
-            output = await self._pipeline.run(  # type: ignore[union-attr]
-                query=text_body,
-                allowed_countries=rtc.countries,
-                system_prompt=system_prompt,
-            )
-            ambiguous = []
-            graph_trace = []
+        inherited_product_id = await self._read_inherited_product(conversation_id)
+        graph_output = await self._pipeline.run(
+            query=text_body,
+            allowed_countries=rtc.countries,
+            system_prompt=system_prompt,
+            conversation_id=conversation_id,
+            inherited_product_id=inherited_product_id,
+        )
+        output = _graph_output_to_pipeline_output(graph_output)
+        ambiguous = list(graph_output.ambiguous_candidates)
+        graph_trace = [t.model_dump(mode="json") for t in graph_output.graph_trace]
 
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
@@ -279,7 +239,7 @@ class AgentOrchestrator:
 
         confirmation = maybe_product_confirmation_reply(
             decision=decision,
-            graph_output=graph_snapshot,
+            graph_output=graph_output,
         )
 
         if confirmation:
@@ -336,7 +296,7 @@ class AgentOrchestrator:
             ticket_id=ticket_id,
             conversation_id=str(conversation_id),
             rtc_user_id=str(rtc.id),
-            pipeline="graph" if self._use_graph else "lcel",
+            pipeline="graph",
         )
         return HandleResult(
             decision=decision,
@@ -359,8 +319,6 @@ class AgentOrchestrator:
         text_body: str,
         ambiguous_candidates: list[Any] | None = None,
     ) -> tuple[DecisionKind, str, RagAnswer | None, str | None]:
-        # Ambiguedad de producto: respondemos pidiendo aclaracion sin abrir
-        # ticket (no es un fallo, es una falta de informacion del usuario).
         if ambiguous_candidates:
             names = " / ".join(c.product_name for c in ambiguous_candidates[:3])
             return (
@@ -372,25 +330,13 @@ class AgentOrchestrator:
 
         gate = effective_retrieval_similarity_threshold(
             configured_threshold=self._threshold,
-            pipeline_uses_graph=self._use_graph,
             rag_vector_weight=self._rag_vector_weight,
         )
 
-        # Epsilon: mismatches float32->float64 al serializar scores de PG.
         epsilon = 1e-5
-        # FAQ direct hit: el grafo responde sin pasar por HybridRetriever, asi que
-        # `retrieved` queda vacio aunque ya haya respuesta canonica + citations.
-        faq_short_circuit = (
-            output.answer is not None
-            and bool(output.answer.citations)
-            and not output.retrieved
-        )
         weak_retrieval = (
-            not faq_short_circuit
-            and (
-                not output.retrieved
-                or output.top_similarity < gate - epsilon
-            )
+            not output.retrieved
+            or output.top_similarity < gate - epsilon
         )
 
         if weak_retrieval:
@@ -401,7 +347,7 @@ class AgentOrchestrator:
                 summary=text_body[:200],
                 notes=(
                     f"top_similarity={output.top_similarity:.3f} "
-                    f"gate={gate:.3f} graph={self._use_graph} "
+                    f"gate={gate:.3f} "
                     f"chunks={len(output.retrieved)}"
                 ),
             )
@@ -439,6 +385,35 @@ class AgentOrchestrator:
             )
 
 
+def _graph_output_to_pipeline_output(graph_output: GraphOutput) -> PipelineOutput:
+    retrieved: list[RetrievedChunk] = [
+        RetrievedChunk(
+            chunk_id=hit.chunk_id,
+            document_id=hit.document_id,
+            document_title=hit.document_title,
+            country_iso=hit.country_iso,
+            chunk_index=hit.chunk_index,
+            content=hit.content,
+            similarity=hit.final_score,
+        )
+        for hit in graph_output.retrieved
+    ]
+
+    answer = None
+    if graph_output.answer_text and graph_output.citations:
+        answer = RagAnswer(
+            answer=graph_output.answer_text,
+            citations=[Citation(**c) for c in graph_output.citations],
+        )
+    return PipelineOutput(
+        retrieved=retrieved,
+        top_similarity=graph_output.top_similarity,
+        answer=answer,
+        raw_answer_text=answer.answer if answer else None,
+        error=graph_output.error,
+    )
+
+
 def _render_answer(answer: RagAnswer) -> str:
     citations_block = "\n".join(f"- {c.document_title}" for c in answer.citations)
     return f"{answer.answer}\n\nFuentes:\n{citations_block}"
@@ -448,70 +423,3 @@ def _hash_phone(phone: str) -> str:
     import hashlib
 
     return hashlib.sha256(phone.encode("utf-8")).hexdigest()[:12]
-
-
-@dataclass(slots=True)
-class _GraphPipelineAdapter:
-    """Adapta `GraphOutput` -> `PipelineOutput` para el resto del orchestrator.
-
-    El grafo y el pipeline LCEL devuelven estructuras distintas; el adapter
-    asegura que `_decide`/persistencia siguen recibiendo un objeto unico.
-    """
-
-    graph_output: GraphOutput
-
-    def to_pipeline_output(self) -> PipelineOutput:
-        from biomont_common.schemas.rag import RetrievedChunk
-
-        retrieved: list[RetrievedChunk] = [
-            RetrievedChunk(
-                chunk_id=hit.chunk_id,
-                document_id=hit.document_id,
-                document_title=hit.document_title,
-                country_iso=hit.country_iso,
-                chunk_index=hit.chunk_index,
-                content=hit.content,
-                similarity=hit.final_score,
-            )
-            for hit in self.graph_output.retrieved
-        ]
-
-        if (
-            self.graph_output.faq_direct_answer is not None
-            and self.graph_output.faq_hits
-        ):
-            top_faq = self.graph_output.faq_hits[0]
-            faq_citations = [
-                Citation(
-                    document_id=top_faq.document_id,
-                    document_title="FAQ",
-                    similarity=top_faq.final_score,
-                )
-            ]
-            answer = RagAnswer(
-                answer=self.graph_output.faq_direct_answer,
-                citations=faq_citations,
-            )
-            return PipelineOutput(
-                retrieved=retrieved,
-                top_similarity=top_faq.final_score,
-                answer=answer,
-                raw_answer_text=answer.answer,
-                error=None,
-            )
-
-        answer = None
-        if self.graph_output.answer_text and self.graph_output.citations:
-            answer = RagAnswer(
-                answer=self.graph_output.answer_text,
-                citations=[
-                    Citation(**c) for c in self.graph_output.citations
-                ],
-            )
-        return PipelineOutput(
-            retrieved=retrieved,
-            top_similarity=self.graph_output.top_similarity,
-            answer=answer,
-            raw_answer_text=answer.answer if answer else None,
-            error=self.graph_output.error,
-        )

@@ -1,4 +1,4 @@
-# Golden set para evaluacion del grafo del agente (spec 003).
+# Golden set para evaluacion del grafo del agente (spec 003/007).
 #
 # Cada caso describe:
 #   query:               input del usuario
@@ -14,17 +14,14 @@
 #   expected_substrings: lista de substrings que la respuesta debe contener
 #                        (matching case-insensitive). Solo se evalua si
 #                        expected_decision == "answered".
-#
-# Para v1 dejamos el set en "MVP" con 5 entradas; el equipo de ciencia
-# extiende a 50 antes de promover a produccion (spec 003, CA-15).
 
 cases:
-  - id: faq-gestacion-direct
+  - id: gestacion-safety-hybrid
     query: "Puede usarse en gestacion?"
     allowed_countries: ["PE"]
-    expected_intent: faq
+    expected_intent: safety_question
     expected_product: null
-    expected_kind_in_filter: ["balotario"]
+    expected_kind_in_filter: ["ficha_tecnica", "bitacora", "balotario"]
     expected_decision: answered
     expected_substrings:
       - "gestante"
@@ -34,7 +31,7 @@ cases:
     allowed_countries: ["PE"]
     expected_intent: dosage_question
     expected_product: "Proteggo 3M"
-    expected_kind_in_filter: ["bitacora", "ficha_tecnica"]
+    expected_kind_in_filter: ["bitacora", "ficha_tecnica", "balotario"]
     expected_decision: answered
     expected_substrings:
       - "mg/kg"
@@ -44,7 +41,7 @@ cases:
     allowed_countries: ["PE"]
     expected_intent: clinical_protocol
     expected_product: null
-    expected_kind_in_filter: ["bitacora"]
+    expected_kind_in_filter: ["bitacora", "balotario"]
     expected_decision: answered
     expected_substrings:
       - "DAPP"
@@ -54,7 +51,7 @@ cases:
     allowed_countries: ["PE"]
     expected_intent: dosage_question
     expected_product: null
-    expected_kind_in_filter: ["bitacora", "ficha_tecnica"]
+    expected_kind_in_filter: ["bitacora", "ficha_tecnica", "balotario"]
     expected_decision: low_confidence
     expected_substrings: []
 

@@ -24,7 +24,6 @@ class Intent(str, Enum):
     clinical_protocol = "clinical_protocol"
     comparison_with_competitor = "comparison_with_competitor"
     safety_question = "safety_question"
-    faq = "faq"
     chitchat = "chitchat"
     out_of_scope = "out_of_scope"
 

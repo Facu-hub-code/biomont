@@ -16,8 +16,6 @@ const SECTION_LINKS = [
   { id: "tab-markdown", label: "Markdown" },
   { id: "tab-secciones", label: "Secciones" },
   { id: "tab-chunks", label: "Chunks (retrieval)" },
-  { id: "tab-faq", label: "FAQ" },
-  { id: "tab-legacy", label: "Legacy chunks" },
 ];
 
 type DocumentSection = {
@@ -42,20 +40,6 @@ type KnowledgeChunk = {
   content: string;
 };
 
-type LegacyChunk = {
-  id: string;
-  chunk_index: number;
-  token_count: number;
-  content: string;
-};
-
-type FaqEntry = {
-  id: string;
-  question: string;
-  answer: string;
-  source_page: number | null;
-};
-
 type Props = {
   documentId: string;
   title: string;
@@ -67,10 +51,6 @@ type Props = {
   sectionsTotal: number;
   knowledgeChunks: KnowledgeChunk[];
   knowledgeChunksTotal: number;
-  legacyChunks: LegacyChunk[];
-  legacyChunksTotal: number;
-  faqEntries: FaqEntry[];
-  faqEntriesTotal: number;
   linkedProducts: LinkedProduct[];
 };
 
@@ -121,14 +101,9 @@ export function DocumentDetailView({
   sectionsTotal,
   knowledgeChunks,
   knowledgeChunksTotal,
-  legacyChunks,
-  legacyChunksTotal,
-  faqEntries,
-  faqEntriesTotal,
   linkedProducts,
 }: Props) {
   const lowKnowledgeTokenCount = countLowTokenChunks(knowledgeChunks);
-  const lowLegacyTokenCount = countLowTokenChunks(legacyChunks);
 
   return (
     <div className="space-y-6">
@@ -142,7 +117,7 @@ export function DocumentDetailView({
             action={deleteDocumentAction}
             triggerLabel="Eliminar documento"
             dialogTitle="¿Eliminar este documento?"
-            dialogDescription={`Esta acción es irreversible. Se borrarán el documento "${title}", sus ${chunkCount} chunks de retrieval, secciones, entradas FAQ y vínculos con productos.`}
+            dialogDescription={`Esta acción es irreversible. Se borrarán el documento "${title}", sus ${chunkCount} chunks de retrieval, secciones y vínculos con productos.`}
             successMessage="Documento eliminado."
           >
             <input type="hidden" name="id" value={documentId} />
@@ -234,72 +209,6 @@ export function DocumentDetailView({
                 ))}
               </tbody>
             </table>
-            </div>
-          </div>
-        )}
-      </CollapsibleSection>
-
-      <CollapsibleSection id="tab-faq" title="FAQ" count={faqEntriesTotal} defaultOpen={false}>
-        {faqEntries.length === 0 ? (
-          <p className="text-sm text-slate-500">Sin entradas FAQ para este documento.</p>
-        ) : (
-          <div className="space-y-3">
-            {faqEntries.map((entry) => (
-              <article
-                key={entry.id}
-                className="rounded-lg border border-slate-200 bg-slate-50/40 p-4"
-              >
-                <p className="text-sm font-medium text-slate-900">{entry.question}</p>
-                <ExpandableText
-                  text={entry.answer}
-                  maxLines={6}
-                  className="mt-2 font-sans"
-                />
-                <p className="mt-2 text-xs text-slate-500">
-                  Pagina fuente: {entry.source_page ?? "-"}
-                </p>
-              </article>
-            ))}
-          </div>
-        )}
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="tab-legacy"
-        title="Legacy chunks"
-        count={legacyChunksTotal}
-        defaultOpen={false}
-      >
-        {legacyChunks.length === 0 ? (
-          <p className="text-sm text-slate-500">Sin document_chunks legacy.</p>
-        ) : (
-          <div className="space-y-3">
-            <LowTokenSectionWarning count={lowLegacyTokenCount} />
-            <div className="table-shell overflow-x-auto">
-              <table className="table-default">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Tokens</th>
-                    <th>Contenido</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {legacyChunks.map((chunk) => (
-                    <tr key={chunk.id}>
-                      <td>{chunk.chunk_index}</td>
-                      <TokenCountCell count={chunk.token_count} />
-                      <td className="max-w-xl">
-                        <ExpandableText
-                          text={chunk.content}
-                          maxLines={8}
-                          className="font-sans text-xs"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
         )}

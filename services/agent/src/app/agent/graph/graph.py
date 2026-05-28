@@ -1,6 +1,4 @@
-"""Composicion del grafo LangGraph del agente (spec 003).
-
-Diagrama:
+"""Composicion del grafo LangGraph del agente (spec 003, simplificado en 007).
 
     IntentClassifier
         |
@@ -8,16 +6,7 @@ Diagrama:
     ProductResolver --(ambiguous)--> END (con mensaje de aclaracion)
         |
         v
-    MetaFilter
-        |
-        v
-    FAQRetriever --(direct hit)--> Answerer --> StateUpdater --> END
-        |
-        | (no direct)
-        v
-    HybridRetriever --> Answerer --> StateUpdater --> END
-
-El nodo `CalculatorNode` queda registrado pero no se enruta en v1.
+    MetaFilter --> HybridRetriever --> Answerer --> StateUpdater --> END
 """
 
 from __future__ import annotations
@@ -33,18 +22,16 @@ from langgraph.graph import END, START, StateGraph
 from biomont_common.db.conversation_state_repository import (
     ConversationStateRepository,
 )
-from biomont_common.db.faq_repository import FaqRepository
 from biomont_common.db.product_repository import ProductRepository
 from biomont_common.db.rag_repository import RagRepository
 from biomont_common.logging import get_logger
 from biomont_common.schemas.agent_graph import GraphNodeTrace, Intent
-from biomont_common.schemas.knowledge import FaqHit, HybridChunkHit
+from biomont_common.schemas.knowledge import HybridChunkHit
 from biomont_common.schemas.products import ProductCandidate
 from biomont_common.settings import RagSettings, get_rag_settings
 
 from app.agent.graph.nodes import (
     AnswererNode,
-    FaqRetrieverNode,
     HybridRetrieverNode,
     IntentClassifierNode,
     MetaFilterNode,
@@ -58,13 +45,7 @@ _logger = get_logger("agent.graph")
 
 @dataclass(slots=True)
 class GraphOutput:
-    """Salida del grafo, compatible (en forma) con `PipelineOutput`.
-
-    Mantenemos campos que el orchestrator ya consume (`retrieved`,
-    `top_similarity`, `answer`, `error`) y agregamos los que el grafo
-    aporta (`intent`, `product_id`, `product_name`, `graph_trace`,
-    `ambiguous_candidates`).
-    """
+    """Salida del grafo consumida por el orchestrator."""
 
     retrieved: list[HybridChunkHit]
     top_similarity: float
@@ -75,8 +56,6 @@ class GraphOutput:
     product_name: str | None
     product_inherited: bool
     ambiguous_candidates: list[ProductCandidate]
-    faq_hits: list[FaqHit]
-    faq_direct_answer: str | None
     graph_trace: list[GraphNodeTrace]
     error: str | None = None
 
@@ -85,7 +64,6 @@ def build_graph(
     *,
     rag_repository: RagRepository,
     product_repository: ProductRepository,
-    faq_repository: FaqRepository,
     state_repository: ConversationStateRepository,
     embeddings: Embeddings,
     chat_model: BaseChatModel,
@@ -103,14 +81,6 @@ def build_graph(
             margin=cfg.product_resolver_margin,
         ),
         "MetaFilter": MetaFilterNode(
-            full_corpus_for_all_intents=cfg.full_corpus_for_all_intents,
-        ),
-        "FAQRetriever": FaqRetrieverNode(
-            repository=faq_repository,
-            embeddings=embeddings,
-            vector_weight=cfg.vector_weight,
-            bm25_weight=cfg.bm25_weight,
-            direct_threshold=cfg.faq_direct_threshold,
             full_corpus_for_all_intents=cfg.full_corpus_for_all_intents,
         ),
         "HybridRetriever": HybridRetrieverNode(
@@ -141,17 +111,7 @@ def build_graph(
         },
     )
 
-    graph.add_edge("MetaFilter", "FAQRetriever")
-
-    graph.add_conditional_edges(
-        "FAQRetriever",
-        _route_after_faq,
-        {
-            "answer": "Answerer",
-            "hybrid": "HybridRetriever",
-        },
-    )
-
+    graph.add_edge("MetaFilter", "HybridRetriever")
     graph.add_edge("HybridRetriever", "Answerer")
     graph.add_edge("Answerer", "StateUpdater")
     graph.add_edge("StateUpdater", END)
@@ -164,12 +124,6 @@ def _route_after_resolver(state: dict) -> str:
     if state.get("ambiguous_candidates"):
         return "ambiguous"
     return "ok"
-
-
-def _route_after_faq(state: dict) -> str:
-    if state.get("faq_direct_answer"):
-        return "answer"
-    return "hybrid"
 
 
 @dataclass
@@ -205,8 +159,6 @@ class GraphPipeline:
             product_name=final.get("product_name"),
             product_inherited=bool(final.get("product_inherited") or False),
             ambiguous_candidates=list(final.get("ambiguous_candidates") or []),
-            faq_hits=list(final.get("faq_hits") or []),
-            faq_direct_answer=final.get("faq_direct_answer"),
             graph_trace=list(final.get("trace") or []),
             error=final.get("error"),
         )

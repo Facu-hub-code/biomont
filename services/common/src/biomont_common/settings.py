@@ -86,16 +86,7 @@ class RagSettings(BaseSettings):
         0.10, alias="PRODUCT_RESOLVER_MARGIN"
     )
 
-    # FAQ retrieval directo.
-    faq_direct_threshold: float = Field(0.80, alias="FAQ_DIRECT_THRESHOLD")
-
-    # Feature flag de corte: si False, el agente sigue usando el pipeline
-    # LCEL viejo contra document_chunks (camino de rollback).
-    agent_use_graph: bool = Field(True, alias="AGENT_USE_GRAPH")
-
-    # Dev / QA / prueba manual del agente: ignora filtros de tipo de documento y de
-    # FAQ por intent. El hibrido busca sobre todos los DocumentKind y el FAQ retriever
-    # corre para cualquier intención.
+    # Dev / QA: ignora filtros de tipo de documento por intent.
     full_corpus_for_all_intents: bool = Field(
         False, alias="RAG_FULL_CORPUS_FOR_ALL_INTENTS"
     )

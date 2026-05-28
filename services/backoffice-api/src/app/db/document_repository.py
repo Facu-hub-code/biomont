@@ -97,28 +97,6 @@ class DocumentKnowledgeChunkRow:
     created_at: datetime
 
 
-@dataclass(slots=True)
-class DocumentLegacyChunkRow:
-    id: UUID
-    document_id: UUID
-    chunk_index: int
-    content: str
-    token_count: int
-    metadata: dict[str, Any]
-    created_at: datetime
-
-
-@dataclass(slots=True)
-class DocumentFaqEntryRow:
-    id: UUID
-    product_id: UUID | None
-    document_id: UUID
-    question: str
-    answer: str
-    source_page: int | None
-    created_at: datetime
-
-
 def compute_sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
@@ -151,7 +129,7 @@ class DocumentRepository:
             FROM public.documents d
             LEFT JOIN (
                 SELECT document_id, count(*) AS cnt
-                FROM public.document_chunks
+                FROM public.knowledge_chunks
                 GROUP BY document_id
             ) c ON c.document_id = d.id
             ORDER BY d.created_at DESC
@@ -243,7 +221,7 @@ class DocumentRepository:
                 FROM public.documents d
                 LEFT JOIN (
                     SELECT document_id, count(*) AS cnt
-                    FROM public.document_chunks
+                    FROM public.knowledge_chunks
                     GROUP BY document_id
                 ) c ON c.document_id = d.id
                 WHERE d.id = $1
@@ -315,56 +293,6 @@ class DocumentRepository:
             total = int(await conn.fetchval(count_sql, document_id) or 0)
             rows = await conn.fetch(list_sql, document_id, page_size, offset)
         return total, [self._row_to_knowledge_chunk_row(row) for row in rows]
-
-    async def list_document_legacy_chunks(
-        self,
-        document_id: UUID,
-        *,
-        page: int,
-        page_size: int,
-    ) -> tuple[int, list[DocumentLegacyChunkRow]]:
-        offset = (page - 1) * page_size
-        count_sql = """
-            SELECT count(*)
-            FROM public.document_chunks
-            WHERE document_id = $1
-        """
-        list_sql = """
-            SELECT id, document_id, chunk_index, content, token_count, metadata, created_at
-            FROM public.document_chunks
-            WHERE document_id = $1
-            ORDER BY chunk_index ASC
-            LIMIT $2 OFFSET $3
-        """
-        async with self._pool.acquire() as conn:
-            total = int(await conn.fetchval(count_sql, document_id) or 0)
-            rows = await conn.fetch(list_sql, document_id, page_size, offset)
-        return total, [self._row_to_legacy_chunk_row(row) for row in rows]
-
-    async def list_document_faq_entries(
-        self,
-        document_id: UUID,
-        *,
-        page: int,
-        page_size: int,
-    ) -> tuple[int, list[DocumentFaqEntryRow]]:
-        offset = (page - 1) * page_size
-        count_sql = """
-            SELECT count(*)
-            FROM public.faq_entries
-            WHERE document_id = $1
-        """
-        list_sql = """
-            SELECT id, product_id, document_id, question, answer, source_page, created_at
-            FROM public.faq_entries
-            WHERE document_id = $1
-            ORDER BY created_at ASC
-            LIMIT $2 OFFSET $3
-        """
-        async with self._pool.acquire() as conn:
-            total = int(await conn.fetchval(count_sql, document_id) or 0)
-            rows = await conn.fetch(list_sql, document_id, page_size, offset)
-        return total, [self._row_to_faq_row(row) for row in rows]
 
     async def find_by_content_sha256(self, sha: str) -> DocumentRow | None:
         async with self._pool.acquire() as conn:
@@ -642,29 +570,5 @@ class DocumentRepository:
             contains_dose=bool(row["contains_dose"]),
             species=list(row["species"] or []),
             metadata=cls._parse_json(row["metadata"]),
-            created_at=row["created_at"],
-        )
-
-    @classmethod
-    def _row_to_legacy_chunk_row(cls, row: Any) -> DocumentLegacyChunkRow:
-        return DocumentLegacyChunkRow(
-            id=row["id"],
-            document_id=row["document_id"],
-            chunk_index=row["chunk_index"],
-            content=row["content"],
-            token_count=row["token_count"],
-            metadata=cls._parse_json(row["metadata"]),
-            created_at=row["created_at"],
-        )
-
-    @staticmethod
-    def _row_to_faq_row(row: Any) -> DocumentFaqEntryRow:
-        return DocumentFaqEntryRow(
-            id=row["id"],
-            product_id=row["product_id"],
-            document_id=row["document_id"],
-            question=row["question"],
-            answer=row["answer"],
-            source_page=row["source_page"],
             created_at=row["created_at"],
         )

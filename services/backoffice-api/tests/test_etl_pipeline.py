@@ -1,21 +1,19 @@
-"""Test del ETL con mocks de docling y embeddings (spec 003).
+"""Test del ETL con mocks de docling y embeddings (spec 007).
 
-Cubre el nuevo flujo: legacy chunks + sections + knowledge_chunks +
-faq_entries por kind, manteniendo idempotencia y `mark_failed` en error.
+Cubre ingest de sections + knowledge_chunks por kind, manteniendo
+idempotencia y `mark_failed` en error.
 """
 
 from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import pytest
 
-from biomont_common.db.rag_repository import ChunkInput, KnowledgeChunkInput
-from biomont_common.integrations.faq_extractor import FaqPair
+from biomont_common.db.rag_repository import KnowledgeChunkInput
 
 from app.services.etl_pipeline import DocumentIngestService
 from app.db.document_repository import SectionInput
@@ -77,33 +75,13 @@ class FakeDocumentRepository:
 
 class FakeRagRepository:
     def __init__(self) -> None:
-        self.legacy_inserts: list[ChunkInput] = []
         self.knowledge_inserts: list[KnowledgeChunkInput] = []
-
-    async def insert_chunks(self, _conn, _doc_id, chunks):
-        self.legacy_inserts.extend(list(chunks))
-
-    async def delete_chunks_for_document(self, _conn, _doc_id) -> None:
-        ...
 
     async def insert_knowledge_chunks(self, _conn, _doc_id, chunks):
         self.knowledge_inserts.extend(list(chunks))
 
     async def delete_knowledge_chunks_for_document(self, _conn, _doc_id) -> None:
         ...
-
-
-class FakeFaqRepository:
-    def __init__(self) -> None:
-        self.inserts: list[Any] = []
-
-    async def delete_for_document(self, _conn, _doc_id) -> None:
-        ...
-
-    async def insert_many(self, _conn, entries) -> int:
-        items = list(entries)
-        self.inserts.extend(items)
-        return len(items)
 
 
 class FakePool:
@@ -117,8 +95,6 @@ class FakePool:
 
 
 class FakeBitacoraConverter:
-    """Devuelve markdown que matchea el formato bitacora (`N°` + `N.M`)."""
-
     def convert_to_markdown(self, _pdf_path: Path) -> str:
         return (
             "1° GENERALIDADES DEL PRINCIPIO ACTIVO\n\n"
@@ -158,16 +134,8 @@ class FakeEmbeddings:
         return [[0.1] * 1536 for _ in texts]
 
 
-@dataclass
-class FakeFaqExtractor:
-    pairs: list[FaqPair] = field(default_factory=list)
-
-    async def extract(self, _markdown: str) -> list[FaqPair]:
-        return list(self.pairs)
-
-
 @pytest.mark.asyncio
-async def test_ingest_bitacora_persists_legacy_and_knowledge_chunks() -> None:
+async def test_ingest_bitacora_persists_knowledge_chunks() -> None:
     documents = FakeDocumentRepository()
     rag = FakeRagRepository()
     pipeline = DocumentIngestService(
@@ -189,38 +157,23 @@ async def test_ingest_bitacora_persists_legacy_and_knowledge_chunks() -> None:
         kind="bitacora",
     )
 
-    assert result.chunks_persisted > 0
     assert result.knowledge_chunks_persisted > 0
     assert result.sections_persisted >= 3
+    assert len(rag.knowledge_inserts) == result.knowledge_chunks_persisted
     assert documents.rows[result.document_id].markdown
     assert documents.failed == {}
 
 
 @pytest.mark.asyncio
-async def test_ingest_balotario_invokes_faq_extractor() -> None:
+async def test_ingest_balotario_persists_knowledge_chunks_only() -> None:
     documents = FakeDocumentRepository()
     rag = FakeRagRepository()
-    faqs = FakeFaqRepository()
-    extractor = FakeFaqExtractor(
-        pairs=[
-            FaqPair(
-                question="Puede usarse en gestacion?",
-                answer="Si, hay estudios de seguridad.",
-            ),
-            FaqPair(
-                question="Cual es la dosis?",
-                answer="10 mg/kg cada 12 semanas.",
-            ),
-        ]
-    )
     pipeline = DocumentIngestService(
         pool=FakePool(),  # type: ignore[arg-type]
         documents=documents,  # type: ignore[arg-type]
         rag=rag,  # type: ignore[arg-type]
         converter=FakeBalotarioConverter(),
         embeddings=FakeEmbeddings(),  # type: ignore[arg-type]
-        faq_repository=faqs,  # type: ignore[arg-type]
-        faq_extractor=extractor,
     )
 
     result = await pipeline.ingest_pdf(
@@ -234,9 +187,8 @@ async def test_ingest_balotario_invokes_faq_extractor() -> None:
         kind="balotario",
     )
 
-    assert result.faq_entries_persisted == 2
-    assert len(faqs.inserts) == 2
     assert result.knowledge_chunks_persisted > 0
+    assert len(rag.knowledge_inserts) == result.knowledge_chunks_persisted
 
 
 @pytest.mark.asyncio
@@ -265,6 +217,7 @@ async def test_ingest_ficha_tecnica_chunks_with_structure() -> None:
     section_types = {c.section_type for c in rag.knowledge_inserts}
     assert "dosing_table" in section_types
     assert "contraindications" in section_types
+    assert result.knowledge_chunks_persisted > 0
 
 
 @pytest.mark.asyncio

@@ -108,18 +108,6 @@ class FakeDocumentRepository:
             return 0, []
         return 0, []
 
-    async def list_document_legacy_chunks(self, document_id: uuid.UUID, *, page: int, page_size: int):
-        _ = (page, page_size)
-        if document_id != self.document_id:
-            return 0, []
-        return 0, []
-
-    async def list_document_faq_entries(self, document_id: uuid.UUID, *, page: int, page_size: int):
-        _ = (page, page_size)
-        if document_id != self.document_id:
-            return 0, []
-        return 0, []
-
 
 def _build_app(repo: FakeDocumentRepository, user: CurrentUser | None) -> FastAPI:
     app = FastAPI()

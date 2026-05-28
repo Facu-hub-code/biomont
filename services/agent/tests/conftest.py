@@ -14,7 +14,7 @@ from uuid import UUID
 
 import pytest
 
-from biomont_common.schemas.knowledge import DocumentKind, FaqHit, HybridChunkHit
+from biomont_common.schemas.knowledge import DocumentKind, HybridChunkHit
 from biomont_common.schemas.products import ProductCandidate
 
 # Setear variables minimas antes de cualquier import del codigo de app.
@@ -174,15 +174,6 @@ class FakeProductRepository:
     async def get_by_id(self, product_id: UUID):
         return self.by_id.get(product_id)
 
-
-class FakeFaqRepository:
-    def __init__(self, hits: Sequence[FaqHit] | None = None) -> None:
-        self._hits = list(hits or [])
-
-    async def search(self, **_kwargs: Any) -> list[FaqHit]:
-        return list(self._hits)
-
-
 class FakeHybridRagRepository:
     def __init__(self, hits: Sequence[HybridChunkHit] | None = None) -> None:
         self._hits = list(hits or [])
@@ -191,9 +182,6 @@ class FakeHybridRagRepository:
     async def search_hybrid_chunks(self, **kwargs: Any) -> list[HybridChunkHit]:
         self.last_call = dict(kwargs)
         return list(self._hits)
-
-    async def search_similar_chunks(self, **kwargs: Any):  # legacy compatibility
-        return []
 
 
 class FakeConversationStateRepository:

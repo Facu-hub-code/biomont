@@ -42,27 +42,5 @@ class DocumentKnowledgeChunkOut(BaseModel):
     created_at: datetime
 
 
-class DocumentLegacyChunkOut(BaseModel):
-    id: UUID
-    document_id: UUID
-    chunk_index: int
-    content: str
-    token_count: int
-    metadata: dict[str, Any]
-    created_at: datetime
-
-
-class DocumentFaqEntryOut(BaseModel):
-    id: UUID
-    product_id: UUID | None = None
-    document_id: UUID
-    question: str
-    answer: str
-    source_page: int | None = None
-    created_at: datetime
-
-
 DocumentSectionListResponse = PaginatedResponse[DocumentSectionOut]
 DocumentKnowledgeChunkListResponse = PaginatedResponse[DocumentKnowledgeChunkOut]
-DocumentLegacyChunkListResponse = PaginatedResponse[DocumentLegacyChunkOut]
-DocumentFaqEntryListResponse = PaginatedResponse[DocumentFaqEntryOut]

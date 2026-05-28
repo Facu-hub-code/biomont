@@ -52,20 +52,6 @@ type KnowledgeChunk = {
   content: string;
 };
 
-type LegacyChunk = {
-  id: string;
-  chunk_index: number;
-  token_count: number;
-  content: string;
-};
-
-type FaqEntry = {
-  id: string;
-  question: string;
-  answer: string;
-  source_page: number | null;
-};
-
 type LinkedProductsResponse = {
   items: LinkedProduct[];
 };
@@ -79,23 +65,16 @@ export default async function DocumentDetailPage({
   const user = await requireRole(["admin", "scientist", "viewer"]);
   const canMutate = user.role === "admin" || user.role === "scientist";
 
-  const [doc, sections, knowledgeChunks, legacyChunks, faqEntries, linkedProducts] =
-    await Promise.all([
-      apiRequest<DocumentDetail>(`/documents/${id}`),
-      apiRequest<PaginatedResponse<DocumentSection>>(
-        `/documents/${id}/sections?page=1&page_size=100`,
-      ),
-      apiRequest<PaginatedResponse<KnowledgeChunk>>(
-        `/documents/${id}/knowledge-chunks?page=1&page_size=100`,
-      ),
-      apiRequest<PaginatedResponse<LegacyChunk>>(
-        `/documents/${id}/document-chunks?page=1&page_size=100`,
-      ),
-      apiRequest<PaginatedResponse<FaqEntry>>(
-        `/documents/${id}/faq-entries?page=1&page_size=100`,
-      ),
-      apiRequest<LinkedProductsResponse>(`/documents/${id}/products`),
-    ]);
+  const [doc, sections, knowledgeChunks, linkedProducts] = await Promise.all([
+    apiRequest<DocumentDetail>(`/documents/${id}`),
+    apiRequest<PaginatedResponse<DocumentSection>>(
+      `/documents/${id}/sections?page=1&page_size=100`,
+    ),
+    apiRequest<PaginatedResponse<KnowledgeChunk>>(
+      `/documents/${id}/knowledge-chunks?page=1&page_size=100`,
+    ),
+    apiRequest<LinkedProductsResponse>(`/documents/${id}/products`),
+  ]);
 
   const metaLine = `${formatProductLine(doc)} · ${doc.country_iso ?? "GLOBAL"} · ${doc.status} · ${doc.chunk_count} chunks`;
 
@@ -111,10 +90,6 @@ export default async function DocumentDetailPage({
       sectionsTotal={sections.total}
       knowledgeChunks={knowledgeChunks.items}
       knowledgeChunksTotal={knowledgeChunks.total}
-      legacyChunks={legacyChunks.items}
-      legacyChunksTotal={legacyChunks.total}
-      faqEntries={faqEntries.items}
-      faqEntriesTotal={faqEntries.total}
       linkedProducts={linkedProducts.items}
     />
   );

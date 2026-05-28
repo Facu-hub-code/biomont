@@ -12,7 +12,6 @@ from app.agent.graph.nodes._helpers import trace_node
 
 @dataclass
 class MetaFilterNode:
-    #: Si True, fuerza retrieval sobre todos los `DocumentKind` para cualquier intent.
     full_corpus_for_all_intents: bool = False
 
     async def __call__(self, state: dict) -> dict:
@@ -22,12 +21,14 @@ class MetaFilterNode:
         with trace_node(updates, node="MetaFilter") as result:
             if self.full_corpus_for_all_intents:
                 kinds = all_kinds
-            elif intent == Intent.faq:
-                kinds = [DocumentKind.balotario]
             elif intent == Intent.clinical_protocol:
-                kinds = [DocumentKind.bitacora]
+                kinds = [DocumentKind.bitacora, DocumentKind.balotario]
             elif intent == Intent.dosage_question:
-                kinds = [DocumentKind.bitacora, DocumentKind.ficha_tecnica]
+                kinds = [
+                    DocumentKind.bitacora,
+                    DocumentKind.ficha_tecnica,
+                    DocumentKind.balotario,
+                ]
             elif intent == Intent.safety_question:
                 kinds = [
                     DocumentKind.ficha_tecnica,

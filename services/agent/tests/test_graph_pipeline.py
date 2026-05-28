@@ -1,11 +1,4 @@
-"""Tests del grafo end-to-end (spec 003).
-
-Mock todos los I/O externos. Verifica el flujo:
-
-- Intent classifier -> FAQ -> short circuit cuando hay hit directo.
-- Intent classifier -> hybrid retriever -> answerer.
-- Producto ambiguo -> END temprano (low_confidence).
-"""
+"""Tests del grafo end-to-end (spec 003/007)."""
 
 from __future__ import annotations
 
@@ -15,7 +8,7 @@ from dataclasses import dataclass
 import pytest
 
 from biomont_common.schemas.agent_graph import Intent
-from biomont_common.schemas.knowledge import DocumentKind, FaqHit
+from biomont_common.schemas.knowledge import DocumentKind
 from biomont_common.schemas.products import ProductCandidate
 from biomont_common.schemas.rag import RagAnswer
 
@@ -25,7 +18,6 @@ from app.agent.graph.graph import build_graph
 from tests.conftest import (
     FakeConversationStateRepository,
     FakeEmbeddings,
-    FakeFaqRepository,
     FakeHybridRagRepository,
     FakeProductRepository,
 )
@@ -46,8 +38,6 @@ class _FakeStructuredOutput:
 
 
 class _FakeChatModel:
-    """Devuelve outputs distintos segun el schema solicitado."""
-
     def __init__(self, *, intent: Intent, answer: RagAnswer):
         self._intent = intent
         self._answer = answer
@@ -62,42 +52,31 @@ class _FakeChatModel:
 
 
 @pytest.mark.asyncio
-async def test_graph_faq_short_circuit(fake_hybrid_chunks):
-    doc_id = uuid.uuid4()
-    faq_repo = FakeFaqRepository(
-        hits=[
-            FaqHit(
-                faq_id=uuid.uuid4(),
-                product_id=None,
-                document_id=doc_id,
-                question="Puede usarse en gestacion?",
-                answer="Si, seguro en gestantes.",
-                final_score=0.95,
-            )
-        ]
-    )
+async def test_graph_safety_question_uses_hybrid_and_answerer(fake_hybrid_chunks):
+    doc_id = fake_hybrid_chunks[0].document_id
     rag_repo = FakeHybridRagRepository(hits=fake_hybrid_chunks)
     product_repo = FakeProductRepository(candidates=[])
     state_repo = FakeConversationStateRepository()
 
+    rag_answer = RagAnswer(
+        answer="Consulte con el veterinario sobre uso en gestantes.",
+        citations=[
+            {
+                "document_id": str(doc_id),
+                "document_title": "Balotario Proteggo",
+                "similarity": 0.88,
+            }
+        ],
+    )
+
     pipeline = build_graph(
         rag_repository=rag_repo,
         product_repository=product_repo,
-        faq_repository=faq_repo,
         state_repository=state_repo,
         embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
-            intent=Intent.faq,
-            answer=RagAnswer(
-                answer="No deberia ejecutarse",
-                citations=[
-                    {
-                        "document_id": str(doc_id),
-                        "document_title": "x",
-                        "similarity": 0.5,
-                    }
-                ],
-            ),
+            intent=Intent.safety_question,
+            answer=rag_answer,
         ),
     )
 
@@ -108,13 +87,12 @@ async def test_graph_faq_short_circuit(fake_hybrid_chunks):
         conversation_id=uuid.uuid4(),
     )
 
-    assert output.faq_direct_answer == "Si, seguro en gestantes."
-    # Cuando hay short-circuit, no se llama al hybrid retriever.
-    assert output.retrieved == []
+    assert output.answer_text == rag_answer.answer
+    assert output.retrieved == fake_hybrid_chunks
     nodes_visited = {t.node for t in output.graph_trace}
-    assert "FAQRetriever" in nodes_visited
-    assert "HybridRetriever" not in nodes_visited
+    assert "HybridRetriever" in nodes_visited
     assert "Answerer" in nodes_visited
+    assert "FAQRetriever" not in nodes_visited
 
 
 @pytest.mark.asyncio
@@ -132,7 +110,6 @@ async def test_graph_full_path_dosage_question(fake_hybrid_chunks):
         ]
     )
     rag_repo = FakeHybridRagRepository(hits=fake_hybrid_chunks)
-    faq_repo = FakeFaqRepository(hits=[])
     state_repo = FakeConversationStateRepository()
 
     rag_answer = RagAnswer(
@@ -149,7 +126,6 @@ async def test_graph_full_path_dosage_question(fake_hybrid_chunks):
     pipeline = build_graph(
         rag_repository=rag_repo,
         product_repository=product_repo,
-        faq_repository=faq_repo,
         state_repository=state_repo,
         embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
@@ -169,17 +145,15 @@ async def test_graph_full_path_dosage_question(fake_hybrid_chunks):
     assert output.answer_text == "Dosis: 25-56 mg/kg."
     assert rag_repo.last_call is not None
     assert rag_repo.last_call["product_id"] == product_id
-    # MetaFilter aplica kinds para dosage_question.
     assert rag_repo.last_call["kinds"]
     assert DocumentKind.bitacora in rag_repo.last_call["kinds"]
+    assert DocumentKind.balotario in rag_repo.last_call["kinds"]
 
 
 @pytest.mark.asyncio
 async def test_graph_dosage_includes_balotario_when_full_corpus_flag(
     fake_hybrid_chunks,
 ):
-    """full_corpus_for_all_intents fuerza retrieval sobre todos los tipos de chunk."""
-
     product_id = uuid.uuid4()
     product_repo = FakeProductRepository(
         candidates=[
@@ -192,7 +166,6 @@ async def test_graph_dosage_includes_balotario_when_full_corpus_flag(
         ]
     )
     rag_repo = FakeHybridRagRepository(hits=fake_hybrid_chunks)
-    faq_repo = FakeFaqRepository(hits=[])
     state_repo = FakeConversationStateRepository()
     rag_answer = RagAnswer(
         answer="x",
@@ -208,7 +181,6 @@ async def test_graph_dosage_includes_balotario_when_full_corpus_flag(
     pipeline = build_graph(
         rag_repository=rag_repo,
         product_repository=product_repo,
-        faq_repository=faq_repo,
         state_repository=state_repo,
         embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
@@ -245,13 +217,11 @@ async def test_graph_ambiguous_product_short_circuits():
         ]
     )
     rag_repo = FakeHybridRagRepository(hits=[])
-    faq_repo = FakeFaqRepository(hits=[])
     state_repo = FakeConversationStateRepository()
 
     pipeline = build_graph(
         rag_repository=rag_repo,
         product_repository=product_repo,
-        faq_repository=faq_repo,
         state_repository=state_repo,
         embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
@@ -280,6 +250,5 @@ async def test_graph_ambiguous_product_short_circuits():
     assert output.answer_text is None
     nodes = {t.node for t in output.graph_trace}
     assert "ProductResolver" in nodes
-    # Cuando es ambiguo no se invoca retriever ni answerer.
     assert "HybridRetriever" not in nodes
     assert "Answerer" not in nodes

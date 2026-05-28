@@ -55,8 +55,6 @@ class DocumentUpdate(BaseModel):
 
 class ReingestResponse(BaseModel):
     document_id: UUID
-    legacy_chunks: int
     knowledge_chunks: int
     sections: int
-    faq_entries: int
     markdown_chars: int

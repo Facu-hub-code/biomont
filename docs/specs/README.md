@@ -22,6 +22,7 @@ este directorio.
 | 004 | [Backoffice: productos, documentos (chunks) y auditoria de agent-decisions](./004-backoffice-products-documents-and-agent-decisions.md) | implementada |
 | 005 | [Backoffice web: feedback async y estados de carga (toast/loading)](./005-backoffice-async-feedback-and-loading-states.md) | implementada |
 | 006 | [Backoffice: vinculacion producto ↔ documento (N:M)](./006-backoffice-product-document-links.md) | implementada |
+| 007 | [Eliminar atajo FAQ, intent `faq` e ingest legacy](./007-remove-faq-shortcut-and-legacy-ingest.md) | implementada |
 
 ## Reglas de calidad
 

@@ -1,14 +1,4 @@
-"""IntentClassifier (spec 003): clasifica el mensaje del usuario.
-
-Taxonomia cerrada definida en `biomont_common.schemas.agent_graph.Intent`.
-Modelo: `gpt-4o-mini` con structured output (json_schema). Si la red
-falla o el LLM devuelve algo invalido, retornamos `out_of_scope` (no
-queremos bloquear el grafo entero por un error de clasificador).
-
-Cache simple por hash(query + prompt_version) durante la vida del
-proceso. Si en el futuro se requiere TTL/eviction, mover a un store
-explicito.
-"""
+"""IntentClassifier (spec 003): clasifica el mensaje del usuario."""
 
 from __future__ import annotations
 
@@ -30,24 +20,14 @@ _SYSTEM_PROMPT = """\
 Sos un clasificador de intencion para un agente veterinario.
 Etiquetas posibles (devolve EXACTAMENTE una):
 
-- dosage_question: pregunta sobre dosis o cuanto administrar.
+- dosage_question: pregunta sobre dosis, cuanto administrar, presentaciones,
+  modo de administracion o uso operativo del producto.
 - clinical_protocol: pregunta sobre protocolos terapeuticos / tratamiento clinico.
 - comparison_with_competitor: comparacion con otro producto (Bravecto, Atrevia, etc).
 - safety_question: efectos adversos, reacciones adversas/eventos adversos,
   tolerancia, contraindicaciones, toxicidad, sobredosis, interacciones,
-  seguridad uso en hepaticos/renales y edades minimas, collies/blancos/MDR1 cuando
-  el foco sea riesgo clinico para el paciente.
-
-  Si hay mezcla seguridad-vs-catalogo pero el contenido centrado esta en seguridad/
-  efectos/indicaciones de vigilancia veterinaria usa esta etiqueta sobre FAQ.
-
-- faq: preguntas frecuentes de catalogo rutinarias (presentaciones, modo de uso,
-  sabores empaque uso comun) donde el foco principal no sea riesgo grave.
-
-  IMPORTANTE EXCEPCION: "Puede usarse en gestacion?" (o lactancia muy similar tipo
-  "en la prenez") debe ir SIEMPRE como faq porque se resuelve primero desde el FAQ
-  del balotario.
-
+  seguridad en gestacion/lactancia, uso en hepaticos/renales, edades minimas,
+  collies/blancos/MDR1 cuando el foco sea riesgo clinico para el paciente.
 - chitchat: saludo o conversacion casual.
 - out_of_scope: fuera del dominio (politica, recetas humanas, etc).
 
@@ -56,10 +36,7 @@ Devolve JSON valido siguiendo el schema dado, sin texto extra.
 
 
 def lexical_safety_signals_present(normalized_query: str) -> bool:
-    """Señales baratas cuando el modelo etiqueta FAQ pero el contenido es riesgo.
-
-    No marca gestacion/embarazo-preñez solas para no romper corto-circuito FAQ.
-    """
+    """Señales baratas cuando el modelo subclasifica riesgo como otro intent."""
 
     q = normalized_query.casefold()
 
@@ -76,34 +53,18 @@ def lexical_safety_signals_present(normalized_query: str) -> bool:
     return any(w in q for w in ("collie", "colie", "pastor ingles"))
 
 
-_GESTATION_FAQ_RELIEF_HINTS = ("gestac", "embarazo", "prenez", "lactanci")
-
-
-def lexical_gestation_faq_intent(normalized_query: str) -> bool:
-    """True si huele a FAQ clasico de uso en reproduccion (balotario)."""
-
-    q = normalized_query.casefold()
-    return any(h in q for h in _GESTATION_FAQ_RELIEF_HINTS)
-
-
 def apply_intent_lexical_calibration(
     classification: IntentClassification, raw_query: str
 ) -> IntentClassification:
     """Corrige errores conocidos despues del LLM antes de rutear retrieval."""
 
     nq = normalize_text(raw_query)
-
     adjusted = classification
-    if lexical_gestation_faq_intent(nq):
-        if adjusted.intent in (Intent.safety_question, Intent.dosage_question):
-            adjusted = IntentClassification(
-                intent=Intent.faq, confidence=min(adjusted.confidence, 0.95)
-            )
-    elif (
-        adjusted.intent == Intent.faq
-        and lexical_safety_signals_present(nq)
+
+    if adjusted.intent == Intent.dosage_question and lexical_safety_signals_present(
+        nq
     ):
-        adjusted = IntentClassification(
+        return IntentClassification(
             intent=Intent.safety_question,
             confidence=max(adjusted.confidence, 0.88),
         )
@@ -165,11 +126,6 @@ class IntentClassifierNode:
 
 
 def _coerce_response(response: object) -> IntentClassification:
-    """Acepta dict / IntentClassification / objeto con .intent (duck typing).
-
-    Hace el nodo tolerante a fakes de tests que solo proveen `.intent`.
-    """
-
     if isinstance(response, IntentClassification):
         return response
     if isinstance(response, dict):

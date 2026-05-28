@@ -17,13 +17,10 @@ from fastapi import (
 )
 
 from biomont_common.db.document_product_repository import DocumentProductRepository
-from biomont_common.db.faq_repository import FaqRepository
 from biomont_common.db.pool import DatabasePool
 from biomont_common.db.product_repository import ProductRepository
 from biomont_common.db.rag_repository import RagRepository
-from biomont_common.integrations.faq_extractor import FaqExtractor
 from biomont_common.integrations.openai_factory import (
-    build_chat_model,
     build_embeddings,
 )
 from biomont_common.logging import get_logger
@@ -55,12 +52,8 @@ from app.schemas.document_products import (
     DocumentProductsReplace,
 )
 from app.schemas.document_details import (
-    DocumentFaqEntryListResponse,
-    DocumentFaqEntryOut,
     DocumentKnowledgeChunkListResponse,
     DocumentKnowledgeChunkOut,
-    DocumentLegacyChunkListResponse,
-    DocumentLegacyChunkOut,
     DocumentSectionListResponse,
     DocumentSectionOut,
 )
@@ -222,16 +215,10 @@ async def upload_document(
 
     converter = get_docling_pdf_converter()
     embeddings = build_embeddings()
-    faq_repository = FaqRepository(pool)
     product_repository = ProductRepository(pool)
     document_products = DocumentProductRepository(pool)
     merged_product_ids, primary_product_id = _merge_ingest_product_ids(
         product_id, product_ids
-    )
-    faq_extractor = (
-        FaqExtractor(chat_model=build_chat_model(temperature=0.0))
-        if kind == DocumentKind.balotario.value
-        else None
     )
     pipeline = DocumentIngestService(
         pool=pool,
@@ -239,10 +226,8 @@ async def upload_document(
         rag=rag,
         converter=converter,
         embeddings=embeddings,
-        faq_repository=faq_repository,
         product_repository=product_repository,
         document_products=document_products,
-        faq_extractor=faq_extractor,
     )
 
     result = await pipeline.ingest_pdf(
@@ -270,7 +255,7 @@ async def upload_document(
         after={
             "title": document.title,
             "country_iso": document.country_iso,
-            "chunks": result.chunks_persisted,
+            "chunks": result.knowledge_chunks_persisted,
         },
     )
     return _detail(document)
@@ -292,13 +277,10 @@ async def reingest_document(
     kind: str = Form(...),
     product_id: UUID | None = Form(default=None),
 ) -> ReingestResponse:
-    """Reingiere un documento existente con el schema enriquecido (spec 003).
+    """Reingiere un documento existente con el schema enriquecido (spec 003/007).
 
     Util para migrar el corpus actual a `knowledge_chunks` +
-    `document_sections` + `faq_entries` sin necesidad de re-uploadear como
-    nuevo documento (lo cual chocaria con `content_sha256 UNIQUE`).
-
-    Solo admins pueden invocarlo (puede modificar datos validados).
+    `document_sections` sin necesidad de re-uploadear como nuevo documento.
     """
 
     existing = await documents.get_document(document_id)
@@ -322,13 +304,7 @@ async def reingest_document(
 
     converter = get_docling_pdf_converter()
     embeddings = build_embeddings()
-    faq_repository = FaqRepository(pool)
     product_repository = ProductRepository(pool)
-    faq_extractor = (
-        FaqExtractor(chat_model=build_chat_model(temperature=0.0))
-        if kind == DocumentKind.balotario.value
-        else None
-    )
 
     pipeline = DocumentIngestService(
         pool=pool,
@@ -336,9 +312,7 @@ async def reingest_document(
         rag=rag,
         converter=converter,
         embeddings=embeddings,
-        faq_repository=faq_repository,
         product_repository=product_repository,
-        faq_extractor=faq_extractor,
     )
 
     result = await pipeline.reingest_existing(
@@ -361,16 +335,13 @@ async def reingest_document(
             "product_id": str(product_id) if product_id else None,
             "knowledge_chunks": result.knowledge_chunks_persisted,
             "sections": result.sections_persisted,
-            "faq_entries": result.faq_entries_persisted,
         },
     )
 
     return ReingestResponse(
         document_id=result.document_id,
-        legacy_chunks=result.chunks_persisted,
         knowledge_chunks=result.knowledge_chunks_persisted,
         sections=result.sections_persisted,
-        faq_entries=result.faq_entries_persisted,
         markdown_chars=result.markdown_chars,
     )
 
@@ -533,59 +504,6 @@ async def list_document_knowledge_chunks(
     )
     return DocumentKnowledgeChunkListResponse(
         items=[DocumentKnowledgeChunkOut(**asdict(row)) for row in rows],
-        page=safe_page,
-        page_size=safe_size,
-        total=total,
-    )
-
-
-@router.get(
-    "/{document_id}/document-chunks",
-    response_model=DocumentLegacyChunkListResponse,
-)
-async def list_document_legacy_chunks(
-    document_id: UUID,
-    _: Annotated[CurrentUser, Depends(require_roles("admin", "scientist", "viewer"))],
-    documents: Annotated[DocumentRepository, Depends(get_documents)],
-    page: int = 1,
-    page_size: int = 25,
-) -> DocumentLegacyChunkListResponse:
-    document = await documents.get_document(document_id)
-    if document is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    safe_page, safe_size = _pagination(page, page_size)
-    total, rows = await documents.list_document_legacy_chunks(
-        document_id,
-        page=safe_page,
-        page_size=safe_size,
-    )
-    return DocumentLegacyChunkListResponse(
-        items=[DocumentLegacyChunkOut(**asdict(row)) for row in rows],
-        page=safe_page,
-        page_size=safe_size,
-        total=total,
-    )
-
-
-@router.get("/{document_id}/faq-entries", response_model=DocumentFaqEntryListResponse)
-async def list_document_faq_entries(
-    document_id: UUID,
-    _: Annotated[CurrentUser, Depends(require_roles("admin", "scientist", "viewer"))],
-    documents: Annotated[DocumentRepository, Depends(get_documents)],
-    page: int = 1,
-    page_size: int = 25,
-) -> DocumentFaqEntryListResponse:
-    document = await documents.get_document(document_id)
-    if document is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    safe_page, safe_size = _pagination(page, page_size)
-    total, rows = await documents.list_document_faq_entries(
-        document_id,
-        page=safe_page,
-        page_size=safe_size,
-    )
-    return DocumentFaqEntryListResponse(
-        items=[DocumentFaqEntryOut(**asdict(row)) for row in rows],
         page=safe_page,
         page_size=safe_size,
         total=total,
