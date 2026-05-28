@@ -1,0 +1,89 @@
+%% Biomont — Ciclo de uso del agente para pruebas de RTC
+%% Representante Técnico Comercial (usuario final en WhatsApp)
+%% Ver también: guia-pruebas-rtc.md
+
+flowchart TB
+  subgraph prereq["0. Requisitos previos (equipo Biomont)"]
+    direction TB
+    P0([Alta del RTC en backoffice<br/>teléfono E.164 + países + enabled=true])
+    P1([Documentos validados<br/>PDF → chunks/FAQ en catálogo])
+    P2([Productos y aliases cargados<br/>nombres comerciales del RTC])
+    P0 --> P1 --> P2
+  end
+
+  subgraph start["1. Inicio de sesión con el agente"]
+    direction TB
+    S1([RTC abre WhatsApp<br/>al número Business de Biomont])
+    S2[Envía primer mensaje de texto]
+    S3{¿Teléfono registrado<br/>y habilitado?}
+    S3 -->|No| S_BLOCK([Respuesta: no autorizado<br/>decision = blocked])
+    S3 -->|Sí| S4([Conversación activa creada<br/>o reutilizada])
+  end
+
+  subgraph query["2. Formulación de la consulta"]
+    direction TB
+    Q1[RTC escribe pregunta<br/>sobre producto veterinario]
+    Q2{¿Menciona producto<br/>con claridad?}
+    Q2 -->|Nombre ambiguo| Q3([Agente repregunta<br/>lista de candidatos])
+    Q2 -->|Nombre claro o FAQ| Q4[Agente busca en documentos<br/>filtrados por país del RTC]
+    Q3 --> Q1
+  end
+
+  subgraph response["3. Respuesta del agente"]
+    direction TB
+    R1{¿Encontró evidencia<br/>suficiente?}
+    R1 -->|Sí, con citas válidas| R2([Respuesta con información<br/>+ fuente documental])
+    R1 -->|Sin documentos relevantes| R3([Mensaje: no tengo esa info<br/>+ ticket #N abierto])
+    R1 -->|Evidencia débil| R4([Mensaje de baja confianza<br/>+ ticket #N])
+    R1 -->|Fuera de alcance| R5([Abstención / no aplica<br/>al catálogo veterinario])
+  end
+
+  subgraph followup["4. Seguimiento conversacional"]
+    direction TB
+    F1{¿RTC continúa<br/>en la misma sesión?}
+    F1 -->|Sí — pregunta de seguimiento| F2[Agente usa contexto previo<br/>p. ej. producto ya resuelto]
+    F1 -->|No — inactividad prolongada| F3([Nueva conversación<br/>en próximo mensaje])
+    F2 --> Q1
+    F3 --> Q1
+  end
+
+  subgraph test["5. Checklist de prueba para el RTC"]
+    direction TB
+    T1["✓ Autorización: primer mensaje responde<br/>(no 'no autorizado')"]
+    T2["✓ Pregunta cerrada: dosis, contraindicación,<br/>protocolo → respuesta con cita"]
+    T3["✓ Pregunta abierta: comparativa o síntesis<br/>→ respuesta coherente o ticket"]
+    T4["✓ Producto ambiguo: agente repregunta<br/>antes de responder"]
+    T5["✓ Fuera de alcance: no inventa respuesta"]
+    T6["✓ Seguimiento: '¿y en lactancia?'<br/>mantiene producto del hilo"]
+    T7["✓ País: solo info de mercados<br/>habilitados para el RTC"]
+  end
+
+  subgraph report["6. Reporte de hallazgos"]
+    direction TB
+    E1{¿Resultado esperado?}
+    E1 -->|Sí| E2([Marcar caso como OK<br/>anotar producto y pregunta])
+    E1 -->|No| E3([Reportar al equipo:<br/>teléfono, hora, pregunta exacta,<br/>respuesta recibida, captura])
+    E3 --> E4([Equipo revisa en backoffice<br/>Decisiones IA / Tickets])
+  end
+
+  prereq --> start
+  S4 --> query
+  Q4 --> response
+  R2 --> followup
+  R3 --> followup
+  R4 --> followup
+  R5 --> followup
+  followup --> test
+  test --> report
+
+  classDef ok fill:#e8f5e9,stroke:#2e7d32;
+  classDef warn fill:#fff8e1,stroke:#f9a825;
+  classDef err fill:#ffebee,stroke:#c62828;
+  classDef info fill:#e3f2fd,stroke:#1565c0;
+  classDef prereq fill:#f3e5f5,stroke:#7b1fa2;
+
+  class P0,P1,P2 prereq;
+  class S4,R2,E2 ok;
+  class Q3,R4,R3 warn;
+  class S_BLOCK,R5 err;
+  class Q4,F2 info;
