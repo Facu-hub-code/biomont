@@ -10,7 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from biomont_common.db.agent_decision_repository import AgentDecisionRepository
 
-from app.api.dependencies import get_agent_decisions, require_roles
+from app.api.dependencies import (
+    get_agent_decision_enrichment,
+    get_agent_decisions,
+    require_roles,
+)
+from app.services.agent_decision_enrichment import AgentDecisionEnrichmentService
 from app.schemas.agent_decisions import (
     AgentDecisionDetail,
     AgentDecisionKind,
@@ -69,9 +74,17 @@ async def list_agent_decisions(
 async def get_agent_decision(
     decision_id: UUID,
     decisions: AgentDecisionRepository = Depends(get_agent_decisions),
+    enrichment_svc: AgentDecisionEnrichmentService = Depends(get_agent_decision_enrichment),
     _: CurrentUser = Depends(require_roles("admin", "scientist", "viewer")),
 ) -> AgentDecisionDetail:
     row = await decisions.get_decision(decision_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return AgentDecisionDetail(**asdict(row))
+    enrichment = await enrichment_svc.enrich(
+        decision_id=decision_id,
+        retrieved=row.retrieved,
+        graph_trace=row.graph_trace,
+    )
+    payload = asdict(row)
+    payload["enrichment"] = enrichment
+    return AgentDecisionDetail(**payload)

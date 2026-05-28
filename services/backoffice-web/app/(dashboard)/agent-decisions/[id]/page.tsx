@@ -1,8 +1,19 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AgentDecisionGraphTracePanel } from "@/components/agent-decision-graph-trace-panel";
+import {
+  AgentDecisionRetrievedPanel,
+  type RetrievedItemEnriched,
+} from "@/components/agent-decision-retrieved-panel";
+import type { GraphTraceStepDisplay } from "@/components/agent-decision-graph-trace-panel";
+import { CatalogBackLink } from "@/components/catalog-back-link";
 import { apiRequest } from "@/lib/api";
 import { requireRole } from "@/lib/auth";
+
+type AgentDecisionDetailEnrichment = {
+  retrieved_items: RetrievedItemEnriched[];
+  graph_trace_display: GraphTraceStepDisplay[];
+};
 
 type AgentDecisionDetail = {
   id: string;
@@ -18,11 +29,8 @@ type AgentDecisionDetail = {
   rtc_name: string | null;
   phone_e164: string | null;
   previous_user_message: string | null;
+  enrichment: AgentDecisionDetailEnrichment;
 };
-
-function fmt(value: unknown): string {
-  return JSON.stringify(value, null, 2);
-}
 
 export default async function AgentDecisionDetailPage({
   params,
@@ -38,8 +46,15 @@ export default async function AgentDecisionDetailPage({
     notFound();
   }
 
+  const enrichment = detail.enrichment ?? {
+    retrieved_items: [],
+    graph_trace_display: [],
+  };
+
   return (
     <div className="space-y-8">
+      <CatalogBackLink href="/agent-decisions" label="Volver a decisiones" />
+
       <header className="space-y-1">
         <h2 className="text-2xl font-semibold text-slate-900">Decision {detail.decision}</h2>
         <p className="text-sm text-slate-500">
@@ -76,39 +91,12 @@ export default async function AgentDecisionDetailPage({
 
       <section className="card space-y-3">
         <h3 className="text-sm font-semibold text-slate-700">Retrieved</h3>
-        {detail.retrieved.length === 0 ? (
-          <p className="text-sm text-slate-500">Sin chunks recuperados.</p>
-        ) : (
-          detail.retrieved.map((item, index) => (
-            <div key={index} className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs">
-              <pre className="overflow-x-auto">{fmt(item)}</pre>
-              {typeof item["document_id"] === "string" ? (
-                <Link
-                  href={`/documents/${item["document_id"]}`}
-                  className="text-biomont-primary hover:underline"
-                >
-                  Abrir documento
-                </Link>
-              ) : null}
-            </div>
-          ))
-        )}
+        <AgentDecisionRetrievedPanel items={enrichment.retrieved_items} />
       </section>
 
       <section className="card space-y-3">
         <h3 className="text-sm font-semibold text-slate-700">Graph trace</h3>
-        {detail.graph_trace.length === 0 ? (
-          <p className="text-sm text-slate-500">Sin pasos de grafo registrados.</p>
-        ) : (
-          detail.graph_trace.map((node, index) => (
-            <details key={index} className="rounded-md border border-slate-200 p-3">
-              <summary className="cursor-pointer text-sm font-medium">
-                Paso {index + 1}: {String(node["node"] ?? node["name"] ?? "n/a")}
-              </summary>
-              <pre className="mt-2 overflow-x-auto text-xs">{fmt(node)}</pre>
-            </details>
-          ))
-        )}
+        <AgentDecisionGraphTracePanel steps={enrichment.graph_trace_display} />
       </section>
     </div>
   );

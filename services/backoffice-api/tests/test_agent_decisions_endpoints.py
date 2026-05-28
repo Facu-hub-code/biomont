@@ -9,8 +9,18 @@ from fastapi import FastAPI, HTTPException, status
 from httpx import ASGITransport, AsyncClient
 
 from app.api.agent_decisions_router import router as agent_decisions_router
-from app.api.dependencies import get_agent_decisions, get_current_user
+from app.api.dependencies import (
+    get_agent_decision_enrichment,
+    get_agent_decisions,
+    get_current_user,
+)
+from app.schemas.agent_decisions import (
+    AgentDecisionDetailEnrichment,
+    GraphTraceStepDisplay,
+    RetrievedItemEnriched,
+)
 from app.schemas.auth import CurrentUser
+from app.services.agent_decision_enrichment import AgentDecisionEnrichmentService
 
 
 @dataclass(slots=True)
@@ -97,10 +107,40 @@ class FakeAgentDecisionRepository:
         return self.detail_row
 
 
+class FakeEnrichmentService(AgentDecisionEnrichmentService):
+    def __init__(self) -> None:
+        pass
+
+    async def enrich(self, *, decision_id, retrieved, graph_trace):
+        return AgentDecisionDetailEnrichment(
+            retrieved_items=[
+                RetrievedItemEnriched(
+                    document_id=uuid.uuid4(),
+                    chunk_id=uuid.uuid4(),
+                    similarity=0.9,
+                    document_title="Doc enriquecido",
+                    chunk_label="ficha · INDICACIONES",
+                    chunk_content="contenido",
+                    chunk_found=True,
+                )
+            ],
+            graph_trace_display=[
+                GraphTraceStepDisplay(
+                    node="answerer",
+                    outcome="ok",
+                    latency_ms=20.0,
+                    display={"intent": "clinical_protocol"},
+                    payload_raw={"intent": "clinical_protocol"},
+                )
+            ],
+        )
+
+
 def _build_app(repo: FakeAgentDecisionRepository, user: CurrentUser | None) -> FastAPI:
     app = FastAPI()
     app.include_router(agent_decisions_router)
     app.dependency_overrides[get_agent_decisions] = lambda: repo
+    app.dependency_overrides[get_agent_decision_enrichment] = lambda: FakeEnrichmentService()
 
     def _current_user():
         if user is None:
@@ -140,6 +180,18 @@ async def test_list_agent_decisions_401_without_auth() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/agent-decisions")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_agent_decision_includes_enrichment(viewer_user) -> None:
+    repo = FakeAgentDecisionRepository()
+    app = _build_app(repo, viewer_user)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/agent-decisions/{repo.decision_id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["enrichment"]["retrieved_items"][0]["document_title"] == "Doc enriquecido"
+    assert body["enrichment"]["graph_trace_display"][0]["node"] == "answerer"
 
 
 @pytest.mark.asyncio
