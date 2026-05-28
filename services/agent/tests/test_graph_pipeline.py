@@ -16,6 +16,7 @@ from biomont_common.settings import RagSettings
 from app.agent.graph.graph import build_graph
 
 from tests.conftest import (
+    FakeAgentConfigRepository,
     FakeConversationStateRepository,
     FakeEmbeddings,
     FakeHybridRagRepository,
@@ -73,6 +74,7 @@ async def test_graph_safety_question_uses_hybrid_and_answerer(fake_hybrid_chunks
         rag_repository=rag_repo,
         product_repository=product_repo,
         state_repository=state_repo,
+        agent_config_repository=FakeAgentConfigRepository(),
         embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
             intent=Intent.safety_question,
@@ -127,6 +129,7 @@ async def test_graph_full_path_dosage_question(fake_hybrid_chunks):
         rag_repository=rag_repo,
         product_repository=product_repo,
         state_repository=state_repo,
+        agent_config_repository=FakeAgentConfigRepository(),
         embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
             intent=Intent.dosage_question, answer=rag_answer
@@ -182,6 +185,7 @@ async def test_graph_dosage_includes_balotario_when_full_corpus_flag(
         rag_repository=rag_repo,
         product_repository=product_repo,
         state_repository=state_repo,
+        agent_config_repository=FakeAgentConfigRepository(),
         embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
             intent=Intent.dosage_question, answer=rag_answer
@@ -223,6 +227,7 @@ async def test_graph_ambiguous_product_short_circuits():
         rag_repository=rag_repo,
         product_repository=product_repo,
         state_repository=state_repo,
+        agent_config_repository=FakeAgentConfigRepository(),
         embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
             intent=Intent.dosage_question,

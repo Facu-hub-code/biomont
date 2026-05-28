@@ -20,3 +20,4 @@ Postgres en Railway.
 | 003 | [003_conversations_tickets.sql](./003_conversations_tickets.sql) | `system_prompts`, conversaciones, mensajes, `agent_decisions`, tickets |
 | 004 | [004_knowledge_restructure.sql](./004_knowledge_restructure.sql) | Productos, aliases, `knowledge_chunks`, FAQ, grafo |
 | 006 | [006_product_document_links.sql](./006_product_document_links.sql) | Tabla puente `document_products` (N:M producto-documento) |
+| 008 | [008_agent_config_from_backoffice.sql](./008_agent_config_from_backoffice.sql) | Config versionada del agente (top_k, intents, kinds) |

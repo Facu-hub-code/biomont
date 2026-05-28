@@ -41,6 +41,13 @@ class AgentGraphState(TypedDict, total=False):
 
     trace: Annotated[list[GraphNodeTrace], add]
 
+    classifier_system_prompt: str
+    classifier_cache_namespace: str
+    runtime_full_corpus: bool
+    intent_kinds_by_slug: dict[str, list[str] | None]
+    retrieval_top_k: int
+    retrieval_candidate_k: int
+
 
 def initial_state(
     *,
@@ -49,6 +56,12 @@ def initial_state(
     system_prompt: str,
     conversation_id: UUID | None,
     inherited_product_id: UUID | None = None,
+    classifier_system_prompt: str = "",
+    classifier_cache_namespace: str = "default",
+    runtime_full_corpus: bool = False,
+    intent_kinds_by_slug: dict[str, list[str] | None] | None = None,
+    retrieval_top_k: int = 6,
+    retrieval_candidate_k: int = 25,
 ) -> AgentGraphState:
     return AgentGraphState(
         query=query,
@@ -63,4 +76,10 @@ def initial_state(
         trace=[],
         state_updated=False,
         product_inherited=False,
+        classifier_system_prompt=classifier_system_prompt,
+        classifier_cache_namespace=classifier_cache_namespace,
+        runtime_full_corpus=runtime_full_corpus,
+        intent_kinds_by_slug=intent_kinds_by_slug or {},
+        retrieval_top_k=retrieval_top_k,
+        retrieval_candidate_k=retrieval_candidate_k,
     )

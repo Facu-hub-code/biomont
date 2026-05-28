@@ -100,6 +100,24 @@ class FakeSystemPromptRepository:
         ...
 
 
+class FakeAgentConfigRepository:
+    """Devuelve snapshot env para tests del grafo sin Postgres."""
+
+    def __init__(self, config=None) -> None:
+        from biomont_common.db.agent_config_repository import (
+            snapshot_from_rag_settings,
+        )
+        from biomont_common.settings import get_rag_settings
+
+        self._config = config or snapshot_from_rag_settings(get_rag_settings())
+
+    async def get_active(self, *, rag_fallback=None):
+        return self._config
+
+    def invalidate(self) -> None:
+        ...
+
+
 class FakeWhatsAppClient:
     def __init__(self) -> None:
         self.sent: list[dict[str, str]] = []

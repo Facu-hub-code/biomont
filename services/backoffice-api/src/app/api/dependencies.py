@@ -24,6 +24,7 @@ from app.db.conversation_admin_repository import ConversationAdminRepository
 from app.db.document_repository import DocumentRepository
 from app.db.product_admin_repository import ProductAdminRepository
 from app.db.rtc_admin_repository import RtcAdminRepository
+from app.db.agent_config_admin_repository import AgentConfigAdminRepository
 from app.db.system_prompt_admin_repository import SystemPromptAdminRepository
 from app.db.ticket_repository import TicketAdminRepository
 from app.schemas.auth import CurrentUser
@@ -56,6 +57,12 @@ def get_prompts(
     pool: Annotated[DatabasePool, Depends(get_pool)],
 ) -> SystemPromptAdminRepository:
     return SystemPromptAdminRepository(pool)
+
+
+def get_agent_config(
+    pool: Annotated[DatabasePool, Depends(get_pool)],
+) -> AgentConfigAdminRepository:
+    return AgentConfigAdminRepository(pool)
 
 
 def get_tickets(pool: Annotated[DatabasePool, Depends(get_pool)]) -> TicketAdminRepository:

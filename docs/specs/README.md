@@ -23,8 +23,8 @@ este directorio.
 | 005 | [Backoffice web: feedback async y estados de carga (toast/loading)](./005-backoffice-async-feedback-and-loading-states.md) | implementada |
 | 006 | [Backoffice: vinculacion producto ↔ documento (N:M)](./006-backoffice-product-document-links.md) | implementada |
 | 007 | [Eliminar atajo FAQ, intent `faq` e ingest legacy](./007-remove-faq-shortcut-and-legacy-ingest.md) | implementada |
-| 008 | [Configuración del agente en DB: top-k, intenciones y prompts](./008-agent-config-from-backoffice-db.md) | borrador |
-| 009 | [Backoffice UX: volver atrás, búsqueda y formularios colapsables](./009-backoffice-catalog-ux-search-and-forms.md) | borrador |
+| 008 | [Configuración del agente en DB: top-k, intenciones y prompts](./008-agent-config-from-backoffice-db.md) | implementada |
+| 009 | [Backoffice UX: volver atrás, búsqueda y formularios colapsables](./009-backoffice-catalog-ux-search-and-forms.md) | implementada |
 
 ## Reglas de calidad
 

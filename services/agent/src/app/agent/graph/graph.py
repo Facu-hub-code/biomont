@@ -19,6 +19,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
 from langgraph.graph import END, START, StateGraph
 
+from biomont_common.db.agent_config_repository import AgentConfigRepository
 from biomont_common.db.conversation_state_repository import (
     ConversationStateRepository,
 )
@@ -65,6 +66,7 @@ def build_graph(
     rag_repository: RagRepository,
     product_repository: ProductRepository,
     state_repository: ConversationStateRepository,
+    agent_config_repository: AgentConfigRepository,
     embeddings: Embeddings,
     chat_model: BaseChatModel,
     settings: RagSettings | None = None,
@@ -117,7 +119,11 @@ def build_graph(
     graph.add_edge("StateUpdater", END)
 
     compiled = graph.compile()
-    return GraphPipeline(compiled=compiled)
+    return GraphPipeline(
+        compiled=compiled,
+        agent_config_repository=agent_config_repository,
+        rag_settings=cfg,
+    )
 
 
 def _route_after_resolver(state: dict) -> str:
@@ -131,6 +137,8 @@ class GraphPipeline:
     """Wrapper que ejecuta el grafo y devuelve `GraphOutput`."""
 
     compiled: Any  # CompiledGraph de LangGraph
+    agent_config_repository: AgentConfigRepository
+    rag_settings: RagSettings
 
     async def run(
         self,
@@ -141,12 +149,21 @@ class GraphPipeline:
         conversation_id: UUID | None = None,
         inherited_product_id: UUID | None = None,
     ) -> GraphOutput:
+        agent_cfg = await self.agent_config_repository.get_active(
+            rag_fallback=self.rag_settings
+        )
         state = initial_state(
             query=query,
             allowed_countries=list(allowed_countries),
             system_prompt=system_prompt,
             conversation_id=conversation_id,
             inherited_product_id=inherited_product_id,
+            classifier_system_prompt=agent_cfg.classifier_system_prompt,
+            classifier_cache_namespace=agent_cfg.cache_namespace,
+            runtime_full_corpus=agent_cfg.full_corpus_for_all_intents,
+            intent_kinds_by_slug=agent_cfg.intent_kinds_by_slug,
+            retrieval_top_k=agent_cfg.top_k,
+            retrieval_candidate_k=agent_cfg.candidate_k,
         )
         final: dict[str, Any] = await self.compiled.ainvoke(state)
         return GraphOutput(

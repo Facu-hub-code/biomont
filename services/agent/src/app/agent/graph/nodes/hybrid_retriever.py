@@ -29,6 +29,8 @@ class HybridRetrieverNode:
         updates: dict = {"retrieved": [], "top_similarity": 0.0}
         with trace_node(updates, node="HybridRetriever") as result:
             embedding = await self.embeddings.aembed_query(query)
+            top_k = int(state.get("retrieval_top_k") or self.top_k)
+            candidate_k = int(state.get("retrieval_candidate_k") or self.candidate_k)
             hits = await self.repository.search_hybrid_chunks(
                 query_text=query,
                 query_embedding=embedding,
@@ -37,8 +39,8 @@ class HybridRetrieverNode:
                 kinds=kinds,
                 vector_weight=self.vector_weight,
                 bm25_weight=self.bm25_weight,
-                top_k=self.top_k,
-                candidate_k=self.candidate_k,
+                top_k=top_k,
+                candidate_k=candidate_k,
             )
 
             top_similarity = hits[0].final_score if hits else 0.0

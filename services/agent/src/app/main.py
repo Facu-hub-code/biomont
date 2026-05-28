@@ -19,6 +19,7 @@ from biomont_common.db.pool import create_pool
 from biomont_common.db.product_repository import ProductRepository
 from biomont_common.db.rag_repository import RagRepository
 from biomont_common.db.rtc_repository import RtcRepository
+from biomont_common.db.agent_config_repository import AgentConfigRepository
 from biomont_common.db.system_prompt_repository import SystemPromptRepository
 from biomont_common.integrations.openai_factory import (
     build_chat_model,
@@ -70,6 +71,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         pool,
         cache_ttl_seconds=agent_settings.system_prompt_cache_ttl_seconds,
     )
+    agent_config_repo = AgentConfigRepository(
+        pool,
+        cache_ttl_seconds=agent_settings.system_prompt_cache_ttl_seconds,
+    )
 
     embeddings = build_embeddings()
     chat_model = build_chat_model()
@@ -82,6 +87,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         rag_repository=rag,
         product_repository=product_repo,
         state_repository=state_repo,
+        agent_config_repository=agent_config_repo,
         embeddings=embeddings,
         chat_model=chat_model,
         settings=rag_settings,

@@ -8,6 +8,7 @@ import {
   MessagesSquare,
   Package,
   Smartphone,
+  Settings2,
   Sparkles,
   Terminal,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[]
   { href: "/agent-decisions", label: "Decisiones IA", icon: BrainCircuit },
   { href: "/rtcs", label: "RTCs", icon: Smartphone },
   { href: "/prompts", label: "System prompt", icon: Terminal },
+  { href: "/agent-config", label: "Config. agente", icon: Settings2 },
   { href: "/tickets", label: "Tickets", icon: LifeBuoy },
 ];
 

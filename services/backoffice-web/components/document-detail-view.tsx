@@ -1,5 +1,6 @@
 "use client";
 
+import { CatalogBackLink } from "@/components/catalog-back-link";
 import {
   DocumentProductsPanel,
   type LinkedProduct,
@@ -107,6 +108,7 @@ export function DocumentDetailView({
 
   return (
     <div className="space-y-6">
+      <CatalogBackLink href="/documents" label="Volver a documentos" />
       <header className="page-header flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="page-title">{title}</h2>

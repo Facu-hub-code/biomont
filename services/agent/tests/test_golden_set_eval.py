@@ -18,6 +18,7 @@ from biomont_common.schemas.rag import RagAnswer  # noqa: E402
 from app.agent.graph.graph import build_graph  # noqa: E402
 
 from tests.conftest import (  # noqa: E402
+    FakeAgentConfigRepository,
     FakeConversationStateRepository,
     FakeEmbeddings,
     FakeHybridRagRepository,
@@ -179,6 +180,7 @@ async def test_golden_set_accuracy():
             rag_repository=rag_repo,
             product_repository=product_repo,
             state_repository=state_repo,
+            agent_config_repository=FakeAgentConfigRepository(),
             embeddings=FakeEmbeddings(),
             chat_model=chat,
         )

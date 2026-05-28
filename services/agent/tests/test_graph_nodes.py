@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 
+from biomont_common.db.agent_config_repository import _LEGACY_INTENT_KINDS
 from biomont_common.schemas.agent_graph import Intent, IntentClassification
 from biomont_common.schemas.knowledge import DocumentKind
 from biomont_common.schemas.products import ProductCandidate
@@ -144,7 +145,12 @@ async def test_meta_filter_maps_intent_to_kinds():
         (Intent.chitchat, None),
     ]
     for intent, expected in cases:
-        state = {"intent": intent, "trace": []}
+        state = {
+            "intent": intent,
+            "trace": [],
+            "runtime_full_corpus": False,
+            "intent_kinds_by_slug": _LEGACY_INTENT_KINDS,
+        }
         updates = await node(state)
         assert updates["filter_kinds"] == expected, (intent, expected)
 
@@ -154,7 +160,12 @@ async def test_meta_filter_full_corpus_uses_all_kinds_irrespective_of_intent():
     node = MetaFilterNode(full_corpus_for_all_intents=True)
     expected_kinds = set(DocumentKind)
     for intent in (Intent.dosage_question, Intent.safety_question, Intent.chitchat):
-        state = {"intent": intent, "trace": []}
+        state = {
+            "intent": intent,
+            "trace": [],
+            "runtime_full_corpus": True,
+            "intent_kinds_by_slug": {},
+        }
         updates = await node(state)
         assert set(updates["filter_kinds"] or []) == expected_kinds, intent
 

@@ -5,6 +5,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { apiRequest } from "@/lib/api";
 import { requireRole } from "@/lib/auth";
 
+import { CatalogBackLink } from "@/components/catalog-back-link";
 import Link from "next/link";
 
 import {
@@ -89,6 +90,7 @@ export default async function ProductDetailPage({
 
   return (
     <div className="space-y-8">
+      <CatalogBackLink href="/products" label="Volver a productos" />
       <header>
         <h2 className="text-2xl font-semibold text-slate-900">{product.name}</h2>
         <p className="text-sm text-slate-500">
