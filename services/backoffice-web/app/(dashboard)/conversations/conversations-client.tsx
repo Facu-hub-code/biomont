@@ -11,7 +11,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { formatRelativeShort, initialsFromName } from "@/lib/format-time";
 
@@ -32,6 +32,15 @@ function truncate(s: string, n: number): string {
   const t = s.trim();
   if (t.length <= n) return t;
   return `${t.slice(0, n)}…`;
+}
+
+function scrollToBottom(el: HTMLElement | null) {
+  if (!el) return;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  });
 }
 
 function pickLatestConversationForRtc(
@@ -113,6 +122,9 @@ export default function ConversationsClient({ canPlayground }: Props) {
   const [playBusy, setPlayBusy] = useState(false);
   const [playError, setPlayError] = useState<string | null>(null);
 
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const playScrollRef = useRef<HTMLDivElement>(null);
+
   const refreshConversations = useCallback(() => {
     startTransition(async () => {
       try {
@@ -125,12 +137,13 @@ export default function ConversationsClient({ canPlayground }: Props) {
     });
   }, []);
 
-  const refreshMessages = useCallback((conversationId: string) => {
+  const refreshMessages = useCallback((conversationId: string, scrollAfter = false) => {
     startTransition(async () => {
       try {
         setLoadError(null);
         const msgs = await fetchConversationMessages(conversationId);
         setMessages(msgs);
+        if (scrollAfter) scrollToBottom(threadScrollRef.current);
       } catch (e) {
         setLoadError(e instanceof Error ? e.message : "Error al cargar mensajes");
       }
@@ -148,7 +161,8 @@ export default function ConversationsClient({ canPlayground }: Props) {
       setMessages([]);
       return;
     }
-    refreshMessages(selectedId);
+    setMessages([]);
+    refreshMessages(selectedId, true);
     const id = window.setInterval(() => refreshMessages(selectedId), POLL_MS);
     return () => window.clearInterval(id);
   }, [selectedId, refreshMessages]);
@@ -177,14 +191,13 @@ export default function ConversationsClient({ canPlayground }: Props) {
     setPlayRtcId(rtcId);
     setModalStep("chat");
     setPlayError(null);
+    setPlayMessages([]);
     try {
       const list = await fetchConversationsList();
       const conv = pickLatestConversationForRtc(list, rtcId);
-      if (conv) {
-        setPlayMessages(await fetchConversationMessages(conv.id));
-      } else {
-        setPlayMessages([]);
-      }
+      const msgs = conv ? await fetchConversationMessages(conv.id) : [];
+      setPlayMessages(msgs);
+      scrollToBottom(playScrollRef.current);
     } catch (e) {
       setPlayError(e instanceof Error ? e.message : "Error al abrir el chat");
     }
@@ -220,6 +233,7 @@ export default function ConversationsClient({ canPlayground }: Props) {
       await postPlaygroundMessage(playRtcId, text);
       setPlayInput("");
       await refreshPlayMessages();
+      scrollToBottom(playScrollRef.current);
       refreshConversations();
       if (selected?.rtc_user_id === playRtcId && selectedId) {
         refreshMessages(selectedId);
@@ -362,7 +376,10 @@ export default function ConversationsClient({ canPlayground }: Props) {
             )}
           </div>
 
-          <div className="relative z-[1] flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-6 md:px-8">
+          <div
+            ref={threadScrollRef}
+            className="relative z-[1] flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-6 md:px-8"
+          >
             {!selectedId ? (
               <div className="m-auto flex max-w-sm flex-col items-center gap-4 px-6 py-12 text-center">
                 <div className="rounded-full bg-white/90 p-5 shadow-soft ring-1 ring-zinc-200/80 backdrop-blur-md">
@@ -393,9 +410,9 @@ export default function ConversationsClient({ canPlayground }: Props) {
           aria-modal="true"
           aria-labelledby="playground-title"
         >
-          <div className="relative w-full max-w-xl animate-[fadeUp_0.35s_ease-out_forwards] opacity-0 shadow-[0_40px_120px_-40px_rgba(15,76,92,0.55)]">
-            <div className="rounded-[28px] bg-gradient-to-br from-teal-500/25 via-white/40 to-transparent p-[1px] shadow-glow">
-              <div className="overflow-hidden rounded-[27px] border border-white/60 bg-white/95 shadow-2xl backdrop-blur-2xl">
+          <div className="relative flex h-[min(820px,92vh)] w-full max-w-4xl animate-[fadeUp_0.35s_ease-out_forwards] opacity-0 shadow-[0_40px_120px_-40px_rgba(15,76,92,0.55)]">
+            <div className="h-full rounded-[28px] bg-gradient-to-br from-teal-500/25 via-white/40 to-transparent p-[1px] shadow-glow">
+              <div className="flex h-full flex-col overflow-hidden rounded-[27px] border border-white/60 bg-white/95 shadow-2xl backdrop-blur-2xl">
                 <div className="flex items-center justify-between gap-4 border-b border-zinc-100/90 bg-gradient-to-r from-white via-teal-50/30 to-white px-6 py-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-600 to-biomont-primary text-white shadow-lg">
@@ -432,7 +449,7 @@ export default function ConversationsClient({ canPlayground }: Props) {
                 ) : null}
 
                 {modalStep === "pick" ? (
-                  <div className="max-h-[min(420px,55vh)] overflow-y-auto p-6">
+                  <div className="min-h-0 flex-1 overflow-y-auto p-6">
                     <p className="mb-4 text-sm font-medium text-zinc-700">Elegí un RTC habilitado</p>
                     <ul className="space-y-2">
                       {rtcs.map((r) => (
@@ -463,7 +480,7 @@ export default function ConversationsClient({ canPlayground }: Props) {
                     ) : null}
                   </div>
                 ) : (
-                  <div className="flex h-[min(480px,62vh)] flex-col">
+                  <div className="flex min-h-0 flex-1 flex-col">
                     <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100/90 bg-white/70 px-5 py-3 text-xs backdrop-blur-sm">
                       <span className="font-semibold uppercase tracking-wide text-zinc-400">RTC activo</span>
                       <span className="rounded-full bg-zinc-100 px-3 py-1 font-mono text-[11px] font-medium text-zinc-700">
@@ -481,7 +498,10 @@ export default function ConversationsClient({ canPlayground }: Props) {
                         Cambiar RTC
                       </button>
                     </div>
-                    <div className="flex flex-1 flex-col gap-4 overflow-y-auto chat-thread-bg px-4 py-4 md:px-5">
+                    <div
+                      ref={playScrollRef}
+                      className="flex flex-1 flex-col gap-4 overflow-y-auto chat-thread-bg px-4 py-4 md:px-5"
+                    >
                       {playMessages.length === 0 ? (
                         <div className="m-auto rounded-2xl border border-dashed border-zinc-200/90 bg-white/70 px-6 py-10 text-center shadow-inner backdrop-blur-sm">
                           <Bot className="mx-auto mb-3 h-10 w-10 text-teal-600/70" />

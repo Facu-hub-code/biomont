@@ -46,6 +46,16 @@ cases:
     expected_substrings:
       - "DAPP"
 
+  - id: imperia-indicacion-dosage
+    query: "Cual es la indicacion de Imperia?"
+    allowed_countries: ["PE"]
+    expected_intent: dosage_question
+    expected_product: "Imperia"
+    expected_kind_in_filter: ["bitacora", "ficha_tecnica", "balotario"]
+    expected_decision: answered
+    expected_substrings:
+      - "IMPERIA"
+
   - id: ambiguous-proteggo
     query: "Cuanto cuesta el proteggo?"
     allowed_countries: ["PE"]
