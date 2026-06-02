@@ -1,13 +1,4 @@
-"""Composicion del grafo LangGraph del agente (spec 003, simplificado en 007).
-
-    IntentClassifier
-        |
-        v
-    ProductResolver --(ambiguous)--> END (con mensaje de aclaracion)
-        |
-        v
-    MetaFilter --> HybridRetriever --> Answerer --> StateUpdater --> END
-"""
+"""Composicion del grafo LangGraph del agente (spec 003 + sprint 2)."""
 
 from __future__ import annotations
 
@@ -20,9 +11,11 @@ from langchain_core.language_models import BaseChatModel
 from langgraph.graph import END, START, StateGraph
 
 from biomont_common.db.agent_config_repository import AgentConfigRepository
+from biomont_common.db.comparison_repository import ComparisonRepository
 from biomont_common.db.conversation_state_repository import (
     ConversationStateRepository,
 )
+from biomont_common.db.dosing_repository import DosingRepository
 from biomont_common.db.product_repository import ProductRepository
 from biomont_common.db.rag_repository import RagRepository
 from biomont_common.logging import get_logger
@@ -31,13 +24,19 @@ from biomont_common.schemas.knowledge import HybridChunkHit
 from biomont_common.schemas.products import ProductCandidate
 from biomont_common.settings import RagSettings, get_rag_settings
 
-from app.agent.graph.nodes import (
-    AnswererNode,
-    HybridRetrieverNode,
-    IntentClassifierNode,
-    MetaFilterNode,
-    ProductResolverNode,
-    StateUpdaterNode,
+from app.agent.graph.nodes.answerer import AnswererNode
+from app.agent.graph.nodes.calculator import DoseCalculatorNode
+from app.agent.graph.nodes.commercial_comparison_diff import (
+    CommercialComparisonDiffNode,
+)
+from app.agent.graph.nodes.competitor_resolver import CompetitorResolverNode
+from app.agent.graph.nodes.hybrid_retriever import HybridRetrieverNode
+from app.agent.graph.nodes.intent_classifier import IntentClassifierNode
+from app.agent.graph.nodes.meta_filter import MetaFilterNode
+from app.agent.graph.nodes.product_resolver import ProductResolverNode
+from app.agent.graph.nodes.state_updater import StateUpdaterNode
+from app.agent.graph.nodes.weight_species_extractor import (
+    WeightSpeciesExtractorNode,
 )
 from app.agent.graph.state import AgentGraphState, initial_state
 
@@ -58,6 +57,7 @@ class GraphOutput:
     product_inherited: bool
     ambiguous_candidates: list[ProductCandidate]
     graph_trace: list[GraphNodeTrace]
+    structured_response: bool = False
     error: str | None = None
 
 
@@ -65,6 +65,8 @@ def build_graph(
     *,
     rag_repository: RagRepository,
     product_repository: ProductRepository,
+    dosing_repository: DosingRepository,
+    comparison_repository: ComparisonRepository,
     state_repository: ConversationStateRepository,
     agent_config_repository: AgentConfigRepository,
     embeddings: Embeddings,
@@ -75,17 +77,43 @@ def build_graph(
 
     cfg = settings or get_rag_settings()
 
-    nodes = {
-        "IntentClassifier": IntentClassifierNode(chat_model=chat_model),
-        "ProductResolver": ProductResolverNode(
+    graph: StateGraph = StateGraph(AgentGraphState)
+
+    graph.add_node("IntentClassifier", IntentClassifierNode(chat_model=chat_model))
+    graph.add_node(
+        "ProductResolver",
+        ProductResolverNode(
             repository=product_repository,
             threshold=cfg.product_resolver_threshold,
             margin=cfg.product_resolver_margin,
         ),
-        "MetaFilter": MetaFilterNode(
-            full_corpus_for_all_intents=cfg.full_corpus_for_all_intents,
+    )
+    graph.add_node(
+        "WeightSpeciesExtractor",
+        WeightSpeciesExtractorNode(),
+    )
+    graph.add_node(
+        "DoseCalculator",
+        DoseCalculatorNode(dosing_repository=dosing_repository),
+    )
+    graph.add_node(
+        "CompetitorResolver",
+        CompetitorResolverNode(
+            comparison_repository=comparison_repository,
+            product_repository=product_repository,
         ),
-        "HybridRetriever": HybridRetrieverNode(
+    )
+    graph.add_node(
+        "CommercialComparisonDiff",
+        CommercialComparisonDiffNode(comparison_repository=comparison_repository),
+    )
+    graph.add_node(
+        "MetaFilter",
+        MetaFilterNode(full_corpus_for_all_intents=cfg.full_corpus_for_all_intents),
+    )
+    graph.add_node(
+        "HybridRetriever",
+        HybridRetrieverNode(
             repository=rag_repository,
             embeddings=embeddings,
             vector_weight=cfg.vector_weight,
@@ -93,13 +121,9 @@ def build_graph(
             top_k=cfg.top_k,
             candidate_k=cfg.candidate_k,
         ),
-        "Answerer": AnswererNode(chat_model=chat_model),
-        "StateUpdater": StateUpdaterNode(repository=state_repository),
-    }
-
-    graph: StateGraph = StateGraph(AgentGraphState)
-    for name, node in nodes.items():
-        graph.add_node(name, node)
+    )
+    graph.add_node("Answerer", AnswererNode(chat_model=chat_model))
+    graph.add_node("StateUpdater", StateUpdaterNode(repository=state_repository))
 
     graph.add_edge(START, "IntentClassifier")
     graph.add_edge("IntentClassifier", "ProductResolver")
@@ -109,9 +133,31 @@ def build_graph(
         _route_after_resolver,
         {
             "ambiguous": END,
-            "ok": "MetaFilter",
+            "dose": "WeightSpeciesExtractor",
+            "comparison": "CompetitorResolver",
+            "rag": "MetaFilter",
         },
     )
+
+    graph.add_conditional_edges(
+        "WeightSpeciesExtractor",
+        _route_after_extractor,
+        {
+            "repregunta": "StateUpdater",
+            "calculate": "DoseCalculator",
+        },
+    )
+    graph.add_edge("DoseCalculator", "StateUpdater")
+
+    graph.add_conditional_edges(
+        "CompetitorResolver",
+        _route_after_competitor_resolver,
+        {
+            "repregunta": "StateUpdater",
+            "diff": "CommercialComparisonDiff",
+        },
+    )
+    graph.add_edge("CommercialComparisonDiff", "StateUpdater")
 
     graph.add_edge("MetaFilter", "HybridRetriever")
     graph.add_edge("HybridRetriever", "Answerer")
@@ -129,14 +175,31 @@ def build_graph(
 def _route_after_resolver(state: dict) -> str:
     if state.get("ambiguous_candidates"):
         return "ambiguous"
-    return "ok"
+    intent = state.get("intent")
+    if intent == Intent.dose_calculation:
+        return "dose"
+    if intent == Intent.comparison_with_competitor:
+        return "comparison"
+    return "rag"
+
+
+def _route_after_extractor(state: dict) -> str:
+    if state.get("answer_text") and state.get("structured_response"):
+        return "repregunta"
+    return "calculate"
+
+
+def _route_after_competitor_resolver(state: dict) -> str:
+    if state.get("answer_text") and state.get("structured_response"):
+        return "repregunta"
+    return "diff"
 
 
 @dataclass
 class GraphPipeline:
     """Wrapper que ejecuta el grafo y devuelve `GraphOutput`."""
 
-    compiled: Any  # CompiledGraph de LangGraph
+    compiled: Any
     agent_config_repository: AgentConfigRepository
     rag_settings: RagSettings
 
@@ -166,6 +229,7 @@ class GraphPipeline:
             retrieval_candidate_k=agent_cfg.candidate_k,
         )
         final: dict[str, Any] = await self.compiled.ainvoke(state)
+        structured = bool(final.get("structured_response"))
         return GraphOutput(
             retrieved=list(final.get("retrieved") or []),
             top_similarity=float(final.get("top_similarity") or 0.0),
@@ -177,5 +241,6 @@ class GraphPipeline:
             product_inherited=bool(final.get("product_inherited") or False),
             ambiguous_candidates=list(final.get("ambiguous_candidates") or []),
             graph_trace=list(final.get("trace") or []),
+            structured_response=structured,
             error=final.get("error"),
         )

@@ -216,10 +216,13 @@ async def test_state_updater_persists_state():
     assert repo.state_by_conv[conv]["last_intent"] == "dosage_question"
 
 
-def test_intent_calibration_moves_adversos_from_dosage_to_safety() -> None:
+def test_intent_calibration_moves_dosage_with_weight_to_dose_calc() -> None:
     baseline = IntentClassification(intent=Intent.dosage_question, confidence=0.9)
     calibrated = apply_intent_lexical_calibration(
-        baseline, "Cuales son los efectos adversos del protego"
+        baseline, "perro de 25 kg que tableta de proteggo 3m"
     )
-    assert calibrated.intent == Intent.safety_question
-    assert calibrated.confidence >= 0.88
+    assert calibrated.intent == Intent.dose_calculation
+
+
+def test_intent_calibration_moves_adversos_from_dosage_to_safety() -> None:
+    baseline = IntentClassification(intent=Intent.dosage_question, confidence=0.9)

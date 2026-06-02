@@ -13,6 +13,7 @@ type Props = {
   ) => Promise<ActionFeedbackState>;
   children: ReactNode;
   successMessage?: string;
+  className?: string;
   /** Tras éxito, navegar (p. ej. borrar producto → /products). El toast sigue visible (provider en layout). */
   redirectOnSuccess?: string;
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
@@ -22,6 +23,7 @@ export function ActionFeedbackForm({
   action,
   children,
   successMessage,
+  className,
   redirectOnSuccess,
   onSubmit,
 }: Props) {
@@ -46,7 +48,7 @@ export function ActionFeedbackForm({
   }, [state, successMessage, redirectOnSuccess, router, showToast]);
 
   return (
-    <form action={formAction} onSubmit={onSubmit}>
+    <form action={formAction} onSubmit={onSubmit} className={className}>
       {children}
     </form>
   );

@@ -51,7 +51,29 @@ def apply_intent_lexical_calibration(
             confidence=max(adjusted.confidence, 0.88),
         )
 
+    if adjusted.intent == Intent.dosage_question and _dose_calculation_signals(nq):
+        return IntentClassification(
+            intent=Intent.dose_calculation,
+            confidence=max(adjusted.confidence, 0.85),
+        )
+
     return adjusted
+
+
+def _dose_calculation_signals(normalized_query: str) -> bool:
+    q = normalized_query
+    has_weight = "kg" in q or "kilo" in q
+    calc_words = (
+        "calcular",
+        "cuanto ml",
+        "cuantos ml",
+        "que tableta",
+        "que presentacion",
+        "que comprimido",
+        "volumen",
+        "cuantas tabletas",
+    )
+    return has_weight and any(w in q for w in calc_words)
 
 
 @dataclass

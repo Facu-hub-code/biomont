@@ -19,7 +19,9 @@ from app.agent.graph.graph import build_graph  # noqa: E402
 
 from tests.conftest import (  # noqa: E402
     FakeAgentConfigRepository,
+    FakeComparisonRepository,
     FakeConversationStateRepository,
+    FakeDosingRepository,
     FakeEmbeddings,
     FakeHybridRagRepository,
     FakeProductRepository,
@@ -179,6 +181,8 @@ async def test_golden_set_accuracy():
         pipeline = build_graph(
             rag_repository=rag_repo,
             product_repository=product_repo,
+            dosing_repository=FakeDosingRepository(),
+            comparison_repository=FakeComparisonRepository(),
             state_repository=state_repo,
             agent_config_repository=FakeAgentConfigRepository(),
             embeddings=FakeEmbeddings(),
@@ -246,6 +250,8 @@ async def test_golden_set_accuracy():
 def _decision_from_output(output) -> str:
     if output.ambiguous_candidates:
         return "low_confidence"
+    if getattr(output, "structured_response", False) and output.answer_text:
+        return "answered"
     if output.answer_text and output.citations:
         return "answered"
     if not output.retrieved:

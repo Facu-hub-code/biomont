@@ -26,6 +26,8 @@ este directorio.
 | 008 | [Configuración del agente en DB: top-k, intenciones y prompts](./008-agent-config-from-backoffice-db.md) | implementada |
 | 009 | [Backoffice UX: volver atrás, búsqueda y formularios colapsables](./009-backoffice-catalog-ux-search-and-forms.md) | implementada |
 | 010 | [Decisiones del agente: BFF, nombres legibles y vista previa de chunks](./010-agent-decisions-detail-bff-enrichment.md) | implementada |
+| 011 | [Motor de calculo de dosis (datos estructurados + backoffice)](./011-dose-calculation-engine.md) | en curso |
+| 012 | [Comparador comercial (columnas dinamicas por documento)](./012-competitor-comparison-hybrid.md) | en curso |
 
 ## Reglas de calidad
 

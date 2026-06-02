@@ -24,6 +24,7 @@ dependencies = [
 # instala como extra `etl` para no inflar las imagenes de tests/CI.
 etl = [
     "docling>=2.0",
+    "openpyxl>=3.1",
 ]
 dev = [
     "pytest>=8.2",

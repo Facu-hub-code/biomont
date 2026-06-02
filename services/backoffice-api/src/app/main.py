@@ -15,6 +15,8 @@ from starlette.responses import Response
 from biomont_common.db.pool import DatabasePool, create_pool
 from biomont_common.logging import configure_logging, get_logger
 
+from app.api.comparison_router import router as comparison_router
+from app.api.dosing_router import router as dosing_router
 from app.api.agent_config_router import router as agent_config_router
 from app.api.analytics_router import router as analytics_router
 from app.api.agent_decisions_router import router as agent_decisions_router
@@ -87,6 +89,8 @@ def create_app() -> FastAPI:
     app.include_router(tickets_router)
     app.include_router(analytics_router)
     app.include_router(products_router)
+    app.include_router(dosing_router)
+    app.include_router(comparison_router)
     app.include_router(agent_decisions_router)
     return app
 

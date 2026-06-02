@@ -12,14 +12,16 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from biomont_common.db.conversation_repository import ConversationRepository
+from biomont_common.db.agent_config_repository import AgentConfigRepository
+from biomont_common.db.comparison_repository import ComparisonRepository
 from biomont_common.db.conversation_state_repository import (
     ConversationStateRepository,
 )
+from biomont_common.db.dosing_repository import DosingRepository
 from biomont_common.db.pool import create_pool
 from biomont_common.db.product_repository import ProductRepository
 from biomont_common.db.rag_repository import RagRepository
 from biomont_common.db.rtc_repository import RtcRepository
-from biomont_common.db.agent_config_repository import AgentConfigRepository
 from biomont_common.db.system_prompt_repository import SystemPromptRepository
 from biomont_common.integrations.openai_factory import (
     build_chat_model,
@@ -81,11 +83,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     rag_settings = get_rag_settings()
     product_repo = ProductRepository(pool)
+    dosing_repo = DosingRepository(pool)
+    comparison_repo = ComparisonRepository(pool)
     state_repo = ConversationStateRepository(pool)
 
     pipeline = build_graph(
         rag_repository=rag,
         product_repository=product_repo,
+        dosing_repository=dosing_repo,
+        comparison_repository=comparison_repo,
         state_repository=state_repo,
         agent_config_repository=agent_config_repo,
         embeddings=embeddings,

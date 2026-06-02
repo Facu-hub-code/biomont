@@ -14,6 +14,7 @@ class DocumentKind(str, Enum):
     ficha_tecnica = "ficha_tecnica"
     bitacora = "bitacora"
     balotario = "balotario"
+    comparativo_comercial = "comparativo_comercial"
 
 
 class HybridChunkHit(BaseModel):

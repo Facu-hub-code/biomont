@@ -10,11 +10,16 @@ import Link from "next/link";
 
 import {
   createAliasAction,
+  createDosingRuleAction,
   deleteAliasAction,
+  importComparisonAction,
   linkDocumentAction,
+  publishComparisonAction,
+  publishDosingAction,
   unlinkDocumentAction,
   updateAliasAction,
   updateProductAction,
+  upsertDosingProfileAction,
 } from "./actions";
 
 type Product = {
@@ -56,6 +61,36 @@ type LinkedDocumentsResponse = {
   total: number;
 };
 
+type DosingBundle = {
+  profiles: Array<{
+    id: string;
+    species: string;
+    supports_dose_calculation: boolean;
+    completeness_status: string;
+    published_version: number;
+    min_weight_kg: string | null;
+    max_weight_kg: string | null;
+  }>;
+  draft_rules: Array<{
+    id: string;
+    profile_id: string;
+    rule_type: string;
+    label: string | null;
+    weight_min_kg: string | null;
+    weight_max_kg: string | null;
+    output_value: string | null;
+    output_unit: string;
+    formula_numerator: string | null;
+  }>;
+  open_gaps_count: number;
+};
+
+type ComparisonSet = {
+  id: string;
+  completeness_status: string;
+  published_version: number;
+} | null;
+
 type DocumentSummary = {
   id: string;
   title: string;
@@ -80,6 +115,18 @@ export default async function ProductDetailPage({
   const linkedDocs = await apiRequest<LinkedDocumentsResponse>(
     `/products/${id}/documents?page=1&page_size=100`,
   );
+  let dosing: DosingBundle = { profiles: [], draft_rules: [], open_gaps_count: 0 };
+  let comparison: ComparisonSet = null;
+  try {
+    dosing = await apiRequest<DosingBundle>(`/products/${id}/dosing`);
+  } catch {
+    dosing = { profiles: [], draft_rules: [], open_gaps_count: 0 };
+  }
+  try {
+    comparison = await apiRequest<ComparisonSet>(`/products/${id}/comparison`);
+  } catch {
+    comparison = null;
+  }
   let allDocuments: DocumentSummary[] = [];
   try {
     const raw = await apiRequest<DocumentSummary[]>("/documents");
@@ -328,6 +375,148 @@ export default async function ProductDetailPage({
             ))}
           </tbody>
         </table>
+      </section>
+
+      <section className="card space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold text-slate-900">Dosis / presentaciones</h3>
+          {dosing.open_gaps_count > 0 ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              Dosis incompleta ({dosing.open_gaps_count} gaps)
+            </span>
+          ) : null}
+        </div>
+        {canMutate ? (
+          <ActionFeedbackForm action={upsertDosingProfileAction} successMessage="Perfil guardado.">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <input type="hidden" name="product_id" value={product.id} />
+              <div>
+                <label className="form-label" htmlFor="species">Especie</label>
+                <input id="species" name="species" placeholder="canine, bovine, calf…" className="form-input" required />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="supports_dose_calculation" defaultChecked className="h-4 w-4" />
+                  Habilitar cálculo
+                </label>
+              </div>
+              <div>
+                <label className="form-label" htmlFor="min_weight_kg">Peso min (kg)</label>
+                <input id="min_weight_kg" name="min_weight_kg" className="form-input" />
+              </div>
+              <div>
+                <label className="form-label" htmlFor="max_weight_kg_dose">Peso max (kg)</label>
+                <input id="max_weight_kg_dose" name="max_weight_kg" className="form-input" />
+              </div>
+              <div className="md:col-span-4">
+                <SubmitButton label="Guardar perfil" pendingLabel="Guardando…" />
+              </div>
+            </div>
+          </ActionFeedbackForm>
+        ) : null}
+        {dosing.profiles.map((profile) => (
+          <div key={profile.id} className="rounded-lg border border-slate-100 p-4">
+            <p className="text-sm font-medium">
+              {profile.species} · v{profile.published_version} · {profile.completeness_status}
+            </p>
+            {canMutate ? (
+              <ActionFeedbackForm action={createDosingRuleAction} successMessage="Regla agregada." className="mt-3">
+                <input type="hidden" name="product_id" value={product.id} />
+                <input type="hidden" name="profile_id" value={profile.id} />
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+                  <select name="rule_type" className="form-input">
+                    <option value="weight_band">Rango peso</option>
+                    <option value="formula">Fórmula</option>
+                  </select>
+                  <input name="label" placeholder="Etiqueta" className="form-input" />
+                  <input name="weight_min_kg" placeholder="Peso min" className="form-input" />
+                  <input name="weight_max_kg" placeholder="Peso max" className="form-input" />
+                  <input name="output_value" placeholder="Valor / mg" className="form-input" />
+                  <SubmitButton label="Agregar regla" pendingLabel="…" className="text-xs" />
+                </div>
+              </ActionFeedbackForm>
+            ) : null}
+            {canMutate && user.role === "admin" ? (
+              <ActionFeedbackForm action={publishDosingAction} successMessage="Publicado." className="mt-2">
+                <input type="hidden" name="product_id" value={product.id} />
+                <input type="hidden" name="profile_id" value={profile.id} />
+                <SubmitButton label="Publicar dosis" pendingLabel="Publicando…" variant="secondary" className="text-xs" />
+              </ActionFeedbackForm>
+            ) : null}
+          </div>
+        ))}
+        {dosing.draft_rules.length > 0 ? (
+          <table className="table-default">
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Etiqueta</th>
+                <th>Rango</th>
+                <th>Salida</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dosing.draft_rules.map((rule) => (
+                <tr key={rule.id}>
+                  <td>{rule.rule_type}</td>
+                  <td>{rule.label ?? "—"}</td>
+                  <td>
+                    {rule.weight_min_kg != null
+                      ? `${rule.weight_min_kg}–${rule.weight_max_kg} kg`
+                      : rule.formula_numerator ?? "—"}
+                  </td>
+                  <td>
+                    {rule.output_value} {rule.output_unit}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm text-slate-500">Sin reglas en borrador.</p>
+        )}
+      </section>
+
+      <section className="card space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold text-slate-900">Comparativa comercial</h3>
+          {comparison && comparison.completeness_status !== "complete" ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              Comparativa incompleta
+            </span>
+          ) : null}
+        </div>
+        {comparison ? (
+          <p className="text-sm text-slate-600">
+            Set cargado · versión publicada {comparison.published_version} ·{" "}
+            {comparison.completeness_status}
+          </p>
+        ) : (
+          <p className="text-sm text-slate-500">Sin cuadro comparativo importado.</p>
+        )}
+        {canMutate ? (
+          <>
+            <ActionFeedbackForm action={importComparisonAction} successMessage="Importado.">
+              <input type="hidden" name="product_id" value={product.id} />
+              <div className="flex flex-wrap items-end gap-3">
+                <input
+                  name="file"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  required
+                  className="form-input max-w-md file:mr-2 file:rounded file:border-0 file:bg-teal-50 file:px-2 file:py-1 file:text-sm"
+                />
+                <SubmitButton label="Importar Excel" pendingLabel="Importando…" />
+              </div>
+            </ActionFeedbackForm>
+            {user.role === "admin" ? (
+              <ActionFeedbackForm action={publishComparisonAction} successMessage="Comparativa publicada.">
+                <input type="hidden" name="product_id" value={product.id} />
+                <SubmitButton label="Publicar comparativa" pendingLabel="Publicando…" variant="secondary" />
+              </ActionFeedbackForm>
+            ) : null}
+          </>
+        ) : null}
       </section>
     </div>
   );

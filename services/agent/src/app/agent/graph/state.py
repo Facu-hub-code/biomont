@@ -38,6 +38,16 @@ class AgentGraphState(TypedDict, total=False):
     error: str | None
 
     state_updated: bool
+    structured_response: bool
+
+    dose_weight_kg: Any
+    dose_species: str | None
+    dose_age_weeks: int | None
+
+    competitor_id: Any
+    competitor_name: str | None
+    competitor_product_id: Any
+    competitor_is_internal: bool
 
     trace: Annotated[list[GraphNodeTrace], add]
 
@@ -76,6 +86,7 @@ def initial_state(
         trace=[],
         state_updated=False,
         product_inherited=False,
+        structured_response=False,
         classifier_system_prompt=classifier_system_prompt,
         classifier_cache_namespace=classifier_cache_namespace,
         runtime_full_corpus=runtime_full_corpus,

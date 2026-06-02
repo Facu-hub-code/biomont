@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getAccessToken, getApiBaseUrl } from "@/lib/api";
 import { formatApiError } from "@/lib/api-error";
 import type { ActionFeedbackState } from "@/lib/form-action-state";
 import { requireRole } from "@/lib/auth";
@@ -156,6 +156,135 @@ export async function deleteAliasAction(
     await apiRequest(`/products/${productId}/aliases/${aliasId}`, { method: "DELETE" });
     revalidatePath(`/products/${productId}`);
     return { ok: true, message: "Alias eliminado." };
+  } catch (e) {
+    return { ok: false, message: formatApiError(e) };
+  }
+}
+
+export async function upsertDosingProfileAction(
+  _prev: ActionFeedbackState | null,
+  formData: FormData,
+): Promise<ActionFeedbackState> {
+  try {
+    await requireRole(["admin", "scientist"]);
+    const productId = String(formData.get("product_id") ?? "");
+    const species = String(formData.get("species") ?? "").trim();
+    if (!productId || !species) {
+      return { ok: false, message: "Producto y especie son obligatorios." };
+    }
+    await apiRequest(`/products/${productId}/dosing/profile`, {
+      method: "PUT",
+      json: {
+        species,
+        supports_dose_calculation: formData.get("supports_dose_calculation") === "on",
+        min_weight_kg: String(formData.get("min_weight_kg") ?? "").trim() || null,
+        max_weight_kg: String(formData.get("max_weight_kg") ?? "").trim() || null,
+      },
+    });
+    revalidatePath(`/products/${productId}`);
+    return { ok: true, message: "Perfil de dosis guardado." };
+  } catch (e) {
+    return { ok: false, message: formatApiError(e) };
+  }
+}
+
+export async function createDosingRuleAction(
+  _prev: ActionFeedbackState | null,
+  formData: FormData,
+): Promise<ActionFeedbackState> {
+  try {
+    await requireRole(["admin", "scientist"]);
+    const productId = String(formData.get("product_id") ?? "");
+    const profileId = String(formData.get("profile_id") ?? "");
+    const ruleType = String(formData.get("rule_type") ?? "weight_band");
+    if (!productId || !profileId) {
+      return { ok: false, message: "Faltan identificadores." };
+    }
+    await apiRequest(`/products/${productId}/dosing/profiles/${profileId}/rules`, {
+      method: "POST",
+      json: {
+        rule_type: ruleType,
+        label: String(formData.get("label") ?? "").trim() || null,
+        formula_numerator: String(formData.get("formula_numerator") ?? "").trim() || null,
+        formula_denominator: String(formData.get("formula_denominator") ?? "1").trim() || "1",
+        formula_per_kg: formData.get("formula_per_kg") === "on",
+        weight_min_kg: String(formData.get("weight_min_kg") ?? "").trim() || null,
+        weight_max_kg: String(formData.get("weight_max_kg") ?? "").trim() || null,
+        output_value: String(formData.get("output_value") ?? "").trim() || null,
+        output_unit: String(formData.get("output_unit") ?? "mg"),
+      },
+    });
+    revalidatePath(`/products/${productId}`);
+    return { ok: true, message: "Regla de dosis agregada." };
+  } catch (e) {
+    return { ok: false, message: formatApiError(e) };
+  }
+}
+
+export async function publishDosingAction(
+  _prev: ActionFeedbackState | null,
+  formData: FormData,
+): Promise<ActionFeedbackState> {
+  try {
+    await requireRole(["admin"]);
+    const productId = String(formData.get("product_id") ?? "");
+    const profileId = String(formData.get("profile_id") ?? "");
+    await apiRequest(`/products/${productId}/dosing/profiles/${profileId}/publish`, {
+      method: "POST",
+    });
+    revalidatePath(`/products/${productId}`);
+    return { ok: true, message: "Dosis publicada." };
+  } catch (e) {
+    return { ok: false, message: formatApiError(e) };
+  }
+}
+
+export async function importComparisonAction(
+  _prev: ActionFeedbackState | null,
+  formData: FormData,
+): Promise<ActionFeedbackState> {
+  try {
+    await requireRole(["admin", "scientist"]);
+    const productId = String(formData.get("product_id") ?? "");
+    const file = formData.get("file");
+    if (!productId) return { ok: false, message: "Falta producto." };
+    if (!(file instanceof File) || file.size === 0) {
+      return { ok: false, message: "Seleccioná un archivo Excel." };
+    }
+    const token = await getAccessToken();
+    if (!token) return { ok: false, message: "Sesión no válida." };
+    const upstream = new FormData();
+    upstream.set("file", file);
+    const response = await fetch(
+      `${getApiBaseUrl()}/products/${productId}/comparison/import`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: upstream,
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text.slice(0, 400) || "Import falló");
+    }
+    revalidatePath(`/products/${productId}`);
+    return { ok: true, message: "Comparativa importada (borrador)." };
+  } catch (e) {
+    return { ok: false, message: formatApiError(e) };
+  }
+}
+
+export async function publishComparisonAction(
+  _prev: ActionFeedbackState | null,
+  formData: FormData,
+): Promise<ActionFeedbackState> {
+  try {
+    await requireRole(["admin"]);
+    const productId = String(formData.get("product_id") ?? "");
+    await apiRequest(`/products/${productId}/comparison/publish`, { method: "POST" });
+    revalidatePath(`/products/${productId}`);
+    return { ok: true, message: "Comparativa publicada." };
   } catch (e) {
     return { ok: false, message: formatApiError(e) };
   }

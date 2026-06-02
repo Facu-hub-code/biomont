@@ -17,11 +17,27 @@ from app.agent.graph.graph import build_graph
 
 from tests.conftest import (
     FakeAgentConfigRepository,
+    FakeComparisonRepository,
     FakeConversationStateRepository,
+    FakeDosingRepository,
     FakeEmbeddings,
     FakeHybridRagRepository,
     FakeProductRepository,
 )
+
+
+def _build_test_pipeline(**kwargs):
+    defaults = dict(
+        rag_repository=kwargs.pop("rag_repository"),
+        product_repository=kwargs.pop("product_repository"),
+        state_repository=kwargs.pop("state_repository"),
+        dosing_repository=FakeDosingRepository(),
+        comparison_repository=FakeComparisonRepository(),
+        agent_config_repository=FakeAgentConfigRepository(),
+        embeddings=FakeEmbeddings(),
+    )
+    defaults.update(kwargs)
+    return build_graph(**defaults)
 
 
 @dataclass
@@ -70,12 +86,10 @@ async def test_graph_safety_question_uses_hybrid_and_answerer(fake_hybrid_chunks
         ],
     )
 
-    pipeline = build_graph(
+    pipeline = _build_test_pipeline(
         rag_repository=rag_repo,
         product_repository=product_repo,
         state_repository=state_repo,
-        agent_config_repository=FakeAgentConfigRepository(),
-        embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
             intent=Intent.safety_question,
             answer=rag_answer,
@@ -125,12 +139,10 @@ async def test_graph_full_path_dosage_question(fake_hybrid_chunks):
         ],
     )
 
-    pipeline = build_graph(
+    pipeline = _build_test_pipeline(
         rag_repository=rag_repo,
         product_repository=product_repo,
         state_repository=state_repo,
-        agent_config_repository=FakeAgentConfigRepository(),
-        embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
             intent=Intent.dosage_question, answer=rag_answer
         ),
@@ -181,16 +193,14 @@ async def test_graph_dosage_includes_balotario_when_full_corpus_flag(
         ],
     )
     cfg = RagSettings(full_corpus_for_all_intents=True)
-    pipeline = build_graph(
+    pipeline = _build_test_pipeline(
         rag_repository=rag_repo,
         product_repository=product_repo,
         state_repository=state_repo,
-        agent_config_repository=FakeAgentConfigRepository(),
-        embeddings=FakeEmbeddings(),
+        settings=cfg,
         chat_model=_FakeChatModel(
             intent=Intent.dosage_question, answer=rag_answer
         ),
-        settings=cfg,
     )
     await pipeline.run(
         query="dosis del proteggo 3m?",
@@ -223,12 +233,10 @@ async def test_graph_ambiguous_product_short_circuits():
     rag_repo = FakeHybridRagRepository(hits=[])
     state_repo = FakeConversationStateRepository()
 
-    pipeline = build_graph(
+    pipeline = _build_test_pipeline(
         rag_repository=rag_repo,
         product_repository=product_repo,
         state_repository=state_repo,
-        agent_config_repository=FakeAgentConfigRepository(),
-        embeddings=FakeEmbeddings(),
         chat_model=_FakeChatModel(
             intent=Intent.dosage_question,
             answer=RagAnswer(

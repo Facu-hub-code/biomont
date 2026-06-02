@@ -26,6 +26,8 @@ from app.db.product_admin_repository import ProductAdminRepository
 from app.db.rtc_admin_repository import RtcAdminRepository
 from app.db.agent_config_admin_repository import AgentConfigAdminRepository
 from app.db.agent_decision_enrichment_repository import AgentDecisionEnrichmentRepository
+from app.db.comparison_admin_repository import ComparisonAdminRepository
+from app.db.dosing_admin_repository import DosingAdminRepository
 from app.db.system_prompt_admin_repository import SystemPromptAdminRepository
 from app.db.ticket_repository import TicketAdminRepository
 from app.schemas.auth import CurrentUser
@@ -105,6 +107,16 @@ def get_conversations(
     pool: Annotated[DatabasePool, Depends(get_pool)],
 ) -> ConversationAdminRepository:
     return ConversationAdminRepository(pool)
+
+
+def get_dosing(pool: Annotated[DatabasePool, Depends(get_pool)]) -> DosingAdminRepository:
+    return DosingAdminRepository(pool)
+
+
+def get_comparison(
+    pool: Annotated[DatabasePool, Depends(get_pool)],
+) -> ComparisonAdminRepository:
+    return ComparisonAdminRepository(pool)
 
 
 def _extract_bearer_token(authorization: str | None) -> str:

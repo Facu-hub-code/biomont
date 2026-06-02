@@ -23,10 +23,11 @@ VALID_DOCUMENT_KINDS = frozenset({k.value for k in DocumentKind})
 
 # Fallback cuando no hay fila activa en DB (alineado a meta_filter.py pre-008).
 _LEGACY_INTENT_KINDS: dict[str, list[str] | None] = {
+    Intent.dose_calculation.value: [],
     Intent.clinical_protocol.value: ["bitacora", "balotario"],
     Intent.dosage_question.value: ["bitacora", "ficha_tecnica", "balotario"],
     Intent.safety_question.value: ["ficha_tecnica", "bitacora", "balotario"],
-    Intent.comparison_with_competitor.value: ["bitacora"],
+    Intent.comparison_with_competitor.value: ["bitacora", "comparativo_comercial"],
 }
 
 

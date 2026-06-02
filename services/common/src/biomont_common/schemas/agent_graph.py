@@ -21,6 +21,7 @@ class Intent(str, Enum):
     """
 
     dosage_question = "dosage_question"
+    dose_calculation = "dose_calculation"
     clinical_protocol = "clinical_protocol"
     comparison_with_competitor = "comparison_with_competitor"
     safety_question = "safety_question"

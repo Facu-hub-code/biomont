@@ -229,13 +229,19 @@ class AgentOrchestrator:
 
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
-        decision, reply_text, answer, ticket_id = await self._decide(
-            conversation_id=conversation_id,
-            user_message_id=user_message_id,
-            output=output,
-            text_body=text_body,
-            ambiguous_candidates=ambiguous,
-        )
+        if graph_output.structured_response and graph_output.answer_text:
+            decision: DecisionKind = "answered"
+            reply_text = graph_output.answer_text
+            answer = None
+            ticket_id = None
+        else:
+            decision, reply_text, answer, ticket_id = await self._decide(
+                conversation_id=conversation_id,
+                user_message_id=user_message_id,
+                output=output,
+                text_body=text_body,
+                ambiguous_candidates=ambiguous,
+            )
 
         confirmation = maybe_product_confirmation_reply(
             decision=decision,

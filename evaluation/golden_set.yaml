@@ -29,12 +29,53 @@ cases:
   - id: dose-proteggo-3m
     query: "Que dosis de Proteggo 3M le doy a un perro de 25kg?"
     allowed_countries: ["PE"]
-    expected_intent: dosage_question
+    expected_intent: dose_calculation
     expected_product: "Proteggo 3M"
-    expected_kind_in_filter: ["bitacora", "ficha_tecnica", "balotario"]
+    expected_kind_in_filter: null
     expected_decision: answered
     expected_substrings:
-      - "mg/kg"
+      - "25"
+      - "backoffice"
+
+  - id: dose-marvo-formula
+    query: "perro de 25 kg que tableta de MARVO 20 le doy?"
+    allowed_countries: ["PE"]
+    expected_intent: dose_calculation
+    expected_product: "MARVO 20"
+    expected_kind_in_filter: null
+    expected_decision: answered
+    expected_substrings:
+      - "kg"
+
+  - id: dose-tulaviot-bovine
+    query: "cual es la dosis de tulaviot para una vaca de 450 kg?"
+    allowed_countries: ["PE"]
+    expected_intent: dose_calculation
+    expected_product: "Tulaviot"
+    expected_kind_in_filter: null
+    expected_decision: answered
+    expected_substrings:
+      - "450"
+
+  - id: comparison-oprurix-apoquel
+    query: "comparar OPRURIX vs Apoquel"
+    allowed_countries: ["PE"]
+    expected_intent: comparison_with_competitor
+    expected_product: "OPRURIX"
+    expected_kind_in_filter: null
+    expected_decision: answered
+    expected_substrings:
+      - "comparativo"
+
+  - id: comparison-marvo-marboxi
+    query: "MARVO 20 versus Marboxi diferencias"
+    allowed_countries: ["PE"]
+    expected_intent: comparison_with_competitor
+    expected_product: "MARVO 20"
+    expected_kind_in_filter: null
+    expected_decision: answered
+    expected_substrings:
+      - "comparativo"
 
   - id: protocol-dapp
     query: "Cual es el protocolo para DAPP?"

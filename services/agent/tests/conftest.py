@@ -214,6 +214,28 @@ class FakeConversationStateRepository:
         self.state_by_conv[conv] = kwargs
 
 
+class FakeDosingRepository:
+    async def get_published_profile(self, product_id: UUID, species: str):
+        return None
+
+    async def list_published_rules(self, profile_id: UUID, version: int):
+        return []
+
+    async def list_species_for_product(self, product_id: UUID):
+        return []
+
+
+class FakeComparisonRepository:
+    async def find_competitor_by_query(self, query: str, limit: int = 5):
+        return []
+
+    async def get_published_set(self, subject_product_id: UUID):
+        return None
+
+    async def diff_rows(self, **kwargs):
+        return None
+
+
 @pytest.fixture()
 def fake_hybrid_chunks() -> list[HybridChunkHit]:
     doc_id = uuid.uuid4()
