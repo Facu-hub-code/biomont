@@ -14,8 +14,15 @@ Reglas obligatorias:
 - "indicacion" / "indicaciones" / "para que sirve" / "en que casos se usa" sobre
   un producto -> dosage_question (salvo que pida explicitamente un protocolo
   nombrado -> clinical_protocol).
+- Si menciona peso en kg (ej. 25 kg, 25kg) y pide que dosis/tableta/presentacion
+  dar o "le doy" para un animal -> dose_calculation (motor determinista), NO
+  dosage_question.
+- dosage_question solo cuando la dosis es informativa sin calculo por peso
+  (administracion con alimento, posologia en gestacion, etc.).
 
 Ejemplos:
+- "Que dosis de Proteggo 3M le doy a un perro de 25 kg?" -> dose_calculation
+- "Perro de 25 kg, que tableta de MARVO 20 le doy?" -> dose_calculation
 - "Cual es la indicacion de Imperia?" -> dosage_question
 - "En que casos se puede utilizar Imperia?" -> dosage_question
 - "Cual es el protocolo para DAPP?" -> clinical_protocol

@@ -296,7 +296,7 @@ Orden de intento:
 | `dose_calculation` | "perro 25 kg qué proteggo" | WeightExtractor → Calculator |
 | `dosage_question` | "¿puedo partir la tableta?", "dosis en gestación" | RAG |
 
-Calibración léxica en `intent_classifier.py`: si hay peso + verbo calcular (`cuanto`, `que tableta`, `presentacion`) → preferir `dose_calculation`.
+Calibración léxica en `intent_classifier.py`: si hay peso parseable (kg) y frase de cálculo (`que dosis le doy`, `que tableta`, `calcular`, etc.) → `dose_calculation`; excluye indicación/gestación/administración informativa (`dosage_question` → RAG). Migración `013_*` actualiza `classifier_hint` en config activa.
 
 ## Plan de pruebas
 

@@ -91,7 +91,7 @@ SELECT
     v.id,
     'dose_calculation',
     'Calculo de dosis',
-    'calcular dosis, cuantos ml, que tableta, que presentacion, perro de X kg, vaca de X kg, ternero, volumen a administrar, cuantas tabletas segun peso.',
+    'Calculo por peso: que dosis le doy, que tableta/presentacion, cuantos ml, perro/vaca de X kg. No usar para indicaciones generales ni gestacion.',
     ARRAY[]::text[],
     5,
     true

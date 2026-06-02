@@ -224,5 +224,30 @@ def test_intent_calibration_moves_dosage_with_weight_to_dose_calc() -> None:
     assert calibrated.intent == Intent.dose_calculation
 
 
+def test_intent_calibration_proteggo_natural_dose_question() -> None:
+    baseline = IntentClassification(intent=Intent.dosage_question, confidence=0.9)
+    calibrated = apply_intent_lexical_calibration(
+        baseline,
+        "¿Qué dosis de Proteggo 3M le doy a un perro de 25 kg?",
+    )
+    assert calibrated.intent == Intent.dose_calculation
+
+
+def test_intent_calibration_dosage_indication_stays_rag() -> None:
+    baseline = IntentClassification(intent=Intent.dosage_question, confidence=0.9)
+    calibrated = apply_intent_lexical_calibration(
+        baseline, "Cual es la indicacion de Imperia?"
+    )
+    assert calibrated.intent == Intent.dosage_question
+
+
+def test_intent_calibration_gestation_stays_rag() -> None:
+    baseline = IntentClassification(intent=Intent.dosage_question, confidence=0.9)
+    calibrated = apply_intent_lexical_calibration(
+        baseline, "Cual es la dosis de Proteggo en gestacion?"
+    )
+    assert calibrated.intent == Intent.dosage_question
+
+
 def test_intent_calibration_moves_adversos_from_dosage_to_safety() -> None:
     baseline = IntentClassification(intent=Intent.dosage_question, confidence=0.9)

@@ -6,6 +6,7 @@ import hashlib
 from dataclasses import dataclass
 
 from biomont_common.db.product_repository import normalize_text
+from biomont_common.dosing.extractors import extract_dosing_context
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -15,6 +16,57 @@ from biomont_common.schemas.agent_graph import Intent, IntentClassification
 from app.agent.graph.nodes._helpers import trace_node
 
 _logger = get_logger("agent.graph.intent")
+
+# Posologia narrativa sin calculo por peso (spec 011 CA-9).
+_DOSAGE_INFO_ONLY_MARKERS = (
+    "con o sin alimento",
+    "cada cuantas horas",
+    "cada cuanto",
+    "gestacion",
+    "embaraz",
+    "partir la tableta",
+    "partir tableta",
+    "ranura",
+    "via de administr",
+    "como se administra",
+    "posologia general",
+)
+
+# Frases de eleccion de presentacion / cantidad segun peso.
+_DOSE_CALC_PHRASES = (
+    "calcular",
+    "cuanto ml",
+    "cuantos ml",
+    "cuanta ml",
+    "que tableta",
+    "que presentacion",
+    "que comprimido",
+    "que comprimidos",
+    "cuantas tabletas",
+    "cuanta tableta",
+    "que dosis",
+    "cuanta dosis",
+    "cuanto dosis",
+    "le doy",
+    "le damos",
+    "debo dar",
+    "debo administrar",
+    "darle",
+    "administrarle",
+    "volumen",
+    "necesito dar",
+    "cuanto le doy",
+    "cuanta le doy",
+)
+
+_DOSE_GIVE_VERBS = (
+    "le doy",
+    "le damos",
+    "debo dar",
+    "darle",
+    "administro",
+    "administrar",
+)
 
 
 def lexical_safety_signals_present(normalized_query: str) -> bool:
@@ -35,6 +87,38 @@ def lexical_safety_signals_present(normalized_query: str) -> bool:
     return any(w in q for w in ("collie", "colie", "pastor ingles"))
 
 
+def _dose_calculation_informational_only(normalized_query: str) -> bool:
+    """True si la pregunta es informativa (RAG), no calculo por peso."""
+
+    q = normalized_query
+    if ("indicacion" in q or "indicaciones" in q) and "kg" not in q and "kilo" not in q:
+        return True
+    return any(marker in q for marker in _DOSAGE_INFO_ONLY_MARKERS)
+
+
+def _has_parseable_weight(query: str, normalized_query: str) -> bool:
+    ctx = extract_dosing_context(query)
+    if ctx.weight_kg is not None:
+        return True
+    return "kg" in normalized_query or "kilo" in normalized_query
+
+
+def dose_calculation_signals(raw_query: str) -> bool:
+    """Detecta preguntas del tipo 'perro 25 kg, que Proteggo/tableta le doy'."""
+
+    nq = normalize_text(raw_query)
+    if not nq or _dose_calculation_informational_only(nq):
+        return False
+    if not _has_parseable_weight(raw_query, nq):
+        return False
+    if any(phrase in nq for phrase in _DOSE_CALC_PHRASES):
+        return True
+    # Caso natural: "que dosis de X le doy a un perro de 25 kg" (golden dose-proteggo-3m).
+    if "dosis" in nq and any(verb in nq for verb in _DOSE_GIVE_VERBS):
+        return True
+    return False
+
+
 def apply_intent_lexical_calibration(
     classification: IntentClassification, raw_query: str
 ) -> IntentClassification:
@@ -51,29 +135,18 @@ def apply_intent_lexical_calibration(
             confidence=max(adjusted.confidence, 0.88),
         )
 
-    if adjusted.intent == Intent.dosage_question and _dose_calculation_signals(nq):
-        return IntentClassification(
-            intent=Intent.dose_calculation,
-            confidence=max(adjusted.confidence, 0.85),
-        )
+    if dose_calculation_signals(raw_query):
+        if adjusted.intent in (
+            Intent.dosage_question,
+            Intent.out_of_scope,
+            Intent.chitchat,
+        ):
+            return IntentClassification(
+                intent=Intent.dose_calculation,
+                confidence=max(adjusted.confidence, 0.85),
+            )
 
     return adjusted
-
-
-def _dose_calculation_signals(normalized_query: str) -> bool:
-    q = normalized_query
-    has_weight = "kg" in q or "kilo" in q
-    calc_words = (
-        "calcular",
-        "cuanto ml",
-        "cuantos ml",
-        "que tableta",
-        "que presentacion",
-        "que comprimido",
-        "volumen",
-        "cuantas tabletas",
-    )
-    return has_weight and any(w in q for w in calc_words)
 
 
 @dataclass

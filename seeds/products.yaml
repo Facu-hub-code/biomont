@@ -29,8 +29,9 @@ products:
 
   - name: Serentis
     duration_type: null
-    description: Referencia veterinaria segun catalogo Biomont.
+    description: Antiemetico maropitant (inyectable). Dosis FT 1 mL/10 kg perros y gatos.
     aliases:
+      - serentis
       - serenis
       - cerentis
       - serum

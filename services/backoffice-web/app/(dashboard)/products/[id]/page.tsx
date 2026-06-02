@@ -111,29 +111,18 @@ export default async function ProductDetailPage({
   } catch {
     notFound();
   }
-  const aliases = await apiRequest<AliasListResponse>(`/products/${id}/aliases?page=1&page_size=100`);
-  const linkedDocs = await apiRequest<LinkedDocumentsResponse>(
-    `/products/${id}/documents?page=1&page_size=100`,
-  );
-  let dosing: DosingBundle = { profiles: [], draft_rules: [], open_gaps_count: 0 };
-  let comparison: ComparisonSet = null;
-  try {
-    dosing = await apiRequest<DosingBundle>(`/products/${id}/dosing`);
-  } catch {
-    dosing = { profiles: [], draft_rules: [], open_gaps_count: 0 };
-  }
-  try {
-    comparison = await apiRequest<ComparisonSet>(`/products/${id}/comparison`);
-  } catch {
-    comparison = null;
-  }
-  let allDocuments: DocumentSummary[] = [];
-  try {
-    const raw = await apiRequest<DocumentSummary[]>("/documents");
-    allDocuments = Array.isArray(raw) ? raw : [];
-  } catch {
-    allDocuments = [];
-  }
+  const emptyDosing: DosingBundle = { profiles: [], draft_rules: [], open_gaps_count: 0 };
+  const [aliases, linkedDocs, dosingResult, comparisonResult, documentsResult] =
+    await Promise.all([
+      apiRequest<AliasListResponse>(`/products/${id}/aliases?page=1&page_size=100`),
+      apiRequest<LinkedDocumentsResponse>(`/products/${id}/documents?page=1&page_size=100`),
+      apiRequest<DosingBundle>(`/products/${id}/dosing`).catch(() => emptyDosing),
+      apiRequest<ComparisonSet>(`/products/${id}/comparison`).catch(() => null),
+      apiRequest<DocumentSummary[]>("/documents").catch(() => [] as DocumentSummary[]),
+    ]);
+  const dosing = dosingResult;
+  const comparison = comparisonResult;
+  const allDocuments = Array.isArray(documentsResult) ? documentsResult : [];
 
   return (
     <div className="space-y-8">
@@ -414,13 +403,22 @@ export default async function ProductDetailPage({
             </div>
           </ActionFeedbackForm>
         ) : null}
-        {dosing.profiles.map((profile) => (
+        {dosing.profiles.map((profile) => {
+          const draftCountForProfile = dosing.draft_rules.filter(
+            (r) => r.profile_id === profile.id,
+          ).length;
+          return (
           <div key={profile.id} className="rounded-lg border border-slate-100 p-4">
             <p className="text-sm font-medium">
               {profile.species} · v{profile.published_version} · {profile.completeness_status}
             </p>
             {canMutate ? (
-              <ActionFeedbackForm action={createDosingRuleAction} successMessage="Regla agregada." className="mt-3">
+              <ActionFeedbackForm
+                key={`dosing-rule-${profile.id}-${draftCountForProfile}`}
+                action={createDosingRuleAction}
+                successMessage="Regla agregada."
+                className="mt-3"
+              >
                 <input type="hidden" name="product_id" value={product.id} />
                 <input type="hidden" name="profile_id" value={profile.id} />
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
@@ -444,7 +442,8 @@ export default async function ProductDetailPage({
               </ActionFeedbackForm>
             ) : null}
           </div>
-        ))}
+          );
+        })}
         {dosing.draft_rules.length > 0 ? (
           <table className="table-default">
             <thead>

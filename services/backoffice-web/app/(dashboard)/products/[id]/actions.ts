@@ -214,7 +214,7 @@ export async function createDosingRuleAction(
         output_unit: String(formData.get("output_unit") ?? "mg"),
       },
     });
-    revalidatePath(`/products/${productId}`);
+    revalidatePath(`/products/${productId}`, "page");
     return { ok: true, message: "Regla de dosis agregada." };
   } catch (e) {
     return { ok: false, message: formatApiError(e) };
