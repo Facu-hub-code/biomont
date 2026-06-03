@@ -198,6 +198,6 @@ def format_dose_response(result: DoseCalculationResult) -> str:
         f"- Resultado: **{result.output_value} {unit}**"
     )
     lines.append(
-        f"Fuente: datos validados del backoffice (version {result.published_version})."
+        f"Fuente: Motor de calculo de dosis (version {result.published_version})."
     )
     return "\n".join(lines)
