@@ -14,6 +14,13 @@ class WhatsAppSettings(BaseSettings):
     verify_token: SecretStr = Field(..., alias="WHATSAPP_VERIFY_TOKEN")
     app_secret: SecretStr = Field(..., alias="WHATSAPP_APP_SECRET")
     graph_api_version: str = Field("v20.0", alias="WHATSAPP_GRAPH_API_VERSION")
+    enable_outbound: bool = Field(True, alias="WHATSAPP_ENABLE_OUTBOUND")
+    webhook_agent_enabled: bool = Field(
+        True, alias="WHATSAPP_WEBHOOK_AGENT_ENABLED"
+    )
+    webhook_skip_signature_verify: bool = Field(
+        False, alias="WHATSAPP_WEBHOOK_SKIP_SIGNATURE_VERIFY"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

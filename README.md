@@ -81,6 +81,8 @@ Variables criticas:
 | `WHATSAPP_ACCESS_TOKEN` | agente | token long-lived |
 | `WHATSAPP_VERIFY_TOKEN` | agente | string elegido por vos |
 | `WHATSAPP_APP_SECRET` | agente | secret de la app de Meta para HMAC |
+| `WHATSAPP_WEBHOOK_AGENT_ENABLED` | agente | `false` = solo ack/logs (fase 1) |
+| `WHATSAPP_ENABLE_OUTBOUND` | agente | `false` = no enviar por Graph API |
 | `JWT_SECRET` | backoffice-api | string >= 32 chars |
 | `AGENT_SIMILARITY_THRESHOLD` | agente | `0.75` |
 | `AGENT_TOP_K` | agente | `6` |
@@ -152,6 +154,16 @@ En el dashboard de la app de Meta:
 - `Callback URL`: `https://<tu-dominio-publico>/whatsapp/webhook`
 - `Verify token`: el valor de `WHATSAPP_VERIFY_TOKEN`
 - Suscribirse al campo `messages`.
+
+**Plan de conexion recomendado** (ver tambien
+[`docs/meta-whatsapp-integration-briefing.md`](docs/meta-whatsapp-integration-briefing.md)):
+
+1. Fase 1 — solo recepcion: `WHATSAPP_WEBHOOK_AGENT_ENABLED=false` y
+   `WHATSAPP_ENABLE_OUTBOUND=false`. Validar GET verify y POST desde el celular.
+2. Fase 2 — agente sin envio: `WHATSAPP_WEBHOOK_AGENT_ENABLED=true`,
+   `WHATSAPP_ENABLE_OUTBOUND=false`. Revisar logs/decisiones en backoffice.
+3. Fase 3 — ida y vuelta: `WHATSAPP_ENABLE_OUTBOUND=true`. Probar con un RTC
+   habilitado en `rtc_users`.
 
 Para desarrollo, exponer el agente con `ngrok http 8001` y usar la URL
 publica.

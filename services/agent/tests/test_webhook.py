@@ -61,10 +61,12 @@ async def test_webhook_processes_text_message_with_valid_signature() -> None:
     stub = StubOrchestrator()
     app = _build_app(stub)
     payload = {
+        "object": "whatsapp_business_account",
         "entry": [
             {
                 "changes": [
                     {
+                        "field": "messages",
                         "value": {
                             "messages": [
                                 {
@@ -73,11 +75,11 @@ async def test_webhook_processes_text_message_with_valid_signature() -> None:
                                     "text": {"body": "Hola agente"},
                                 }
                             ]
-                        }
+                        },
                     }
                 ]
             }
-        ]
+        ],
     }
     body = json.dumps(payload).encode()
     async with AsyncClient(
@@ -113,6 +115,49 @@ async def test_webhook_verify_get_returns_challenge() -> None:
         )
     assert response.status_code == 200
     assert response.text == "abc123"
+
+
+@pytest.mark.asyncio
+async def test_webhook_receive_only_skips_orchestrator(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WHATSAPP_WEBHOOK_AGENT_ENABLED", "false")
+    get_whatsapp_settings.cache_clear()
+
+    stub = StubOrchestrator()
+    app = _build_app(stub)
+    payload = {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "51999000111",
+                                    "type": "text",
+                                    "text": {"body": "Hola agente"},
+                                }
+                            ]
+                        },
+                    }
+                ]
+            }
+        ],
+    }
+    body = json.dumps(payload).encode()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/whatsapp/webhook",
+            content=body,
+            headers={"X-Hub-Signature-256": _sign(body)},
+        )
+    get_whatsapp_settings.cache_clear()
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "processed": 0, "agent_enabled": False}
+    assert stub.calls == []
 
 
 @pytest.mark.asyncio

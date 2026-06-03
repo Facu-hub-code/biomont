@@ -52,6 +52,12 @@ class MetaWhatsAppClient:
     async def send_text(self, *, to_phone_e164: str, body: str) -> None:
         if not body.strip():
             return
+        if not self._settings.enable_outbound:
+            _logger.info(
+                "whatsapp_outbound_disabled",
+                action="send_skipped",
+            )
+            return
         normalized_phone = to_phone_e164.lstrip("+")
         payload = {
             "messaging_product": "whatsapp",
