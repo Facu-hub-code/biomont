@@ -35,6 +35,7 @@ class ComparisonDiffItem(BaseModel):
     header_label: str
     subject_value: str
     competitor_value: str
+    sort_order: int = 0
 
 
 class ComparisonDiffResult(BaseModel):
@@ -43,3 +44,35 @@ class ComparisonDiffResult(BaseModel):
     competitor_name: str
     published_version: int
     differences: list[ComparisonDiffItem]
+
+
+class ComparisonRedactorItem(BaseModel):
+    column_key: str
+    header_label: str
+    tier: int
+    subject_snippet: str
+    competitor_snippet: str
+    truncated: bool = False
+
+
+class ComparisonRedactorInput(BaseModel):
+    subject_name: str
+    competitor_name: str
+    published_version: int
+    presentation_mode: str  # summary | focus | full
+    focus_column_key: str | None = None
+    highlight_items: list[ComparisonRedactorItem]
+    items: list[ComparisonRedactorItem]
+    other_items_count: int
+
+
+class ComparisonRedactorBullet(BaseModel):
+    column_key: str
+    text: str
+
+
+class ComparisonRedactorOutput(BaseModel):
+    opening: str
+    bullets: list[ComparisonRedactorBullet]
+    closing_hint: str | None = None
+    footer: str

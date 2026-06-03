@@ -29,6 +29,7 @@ from app.agent.graph.nodes.calculator import DoseCalculatorNode
 from app.agent.graph.nodes.commercial_comparison_diff import (
     CommercialComparisonDiffNode,
 )
+from app.agent.graph.nodes.comparison_redactor import ComparisonRedactorNode
 from app.agent.graph.nodes.competitor_resolver import CompetitorResolverNode
 from app.agent.graph.nodes.hybrid_retriever import HybridRetrieverNode
 from app.agent.graph.nodes.intent_classifier import IntentClassifierNode
@@ -108,6 +109,13 @@ def build_graph(
         CommercialComparisonDiffNode(comparison_repository=comparison_repository),
     )
     graph.add_node(
+        "ComparisonRedactor",
+        ComparisonRedactorNode(
+            chat_model=chat_model,
+            llm_enabled=cfg.comparison_llm_redactor,
+        ),
+    )
+    graph.add_node(
         "MetaFilter",
         MetaFilterNode(full_corpus_for_all_intents=cfg.full_corpus_for_all_intents),
     )
@@ -157,7 +165,15 @@ def build_graph(
             "diff": "CommercialComparisonDiff",
         },
     )
-    graph.add_edge("CommercialComparisonDiff", "StateUpdater")
+    graph.add_conditional_edges(
+        "CommercialComparisonDiff",
+        _route_after_comparison_diff,
+        {
+            "repregunta": "StateUpdater",
+            "redactor": "ComparisonRedactor",
+        },
+    )
+    graph.add_edge("ComparisonRedactor", "StateUpdater")
 
     graph.add_edge("MetaFilter", "HybridRetriever")
     graph.add_edge("HybridRetriever", "Answerer")
@@ -193,6 +209,14 @@ def _route_after_competitor_resolver(state: dict) -> str:
     if state.get("answer_text") and state.get("structured_response"):
         return "repregunta"
     return "diff"
+
+
+def _route_after_comparison_diff(state: dict) -> str:
+    if state.get("answer_text") and state.get("structured_response"):
+        return "repregunta"
+    if state.get("comparison_diff"):
+        return "redactor"
+    return "repregunta"
 
 
 @dataclass

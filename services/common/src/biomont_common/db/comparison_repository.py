@@ -223,6 +223,7 @@ class ComparisonRepository:
                     header_label=col.header_label,
                     subject_value=subj_val or "(sin dato)",
                     competitor_value=comp_val or "(sin dato)",
+                    sort_order=col.sort_order,
                 )
             )
 

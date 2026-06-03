@@ -49,6 +49,9 @@ class AgentGraphState(TypedDict, total=False):
     competitor_product_id: Any
     competitor_is_internal: bool
 
+    comparison_diff: dict[str, Any] | None
+    comparison_diff_version: int | None
+
     trace: Annotated[list[GraphNodeTrace], add]
 
     classifier_system_prompt: str

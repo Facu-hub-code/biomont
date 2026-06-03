@@ -97,6 +97,11 @@ class RagSettings(BaseSettings):
     knowledge_chunk_tokens: int = Field(1000, alias="RAG_KNOWLEDGE_CHUNK_TOKENS")
     knowledge_chunk_overlap: int = Field(120, alias="RAG_KNOWLEDGE_CHUNK_OVERLAP")
 
+    # Spec 013: redaccion LLM del comparador comercial (diff sigue determinista).
+    comparison_llm_redactor: bool = Field(
+        True, alias="AGENT_COMPARISON_LLM_REDACTOR"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

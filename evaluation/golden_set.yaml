@@ -35,7 +35,7 @@ cases:
     expected_decision: answered
     expected_substrings:
       - "25"
-      - "backoffice"
+      - "kg"
 
   - id: dose-marvo-formula
     query: "perro de 25 kg que tableta de MARVO 20 le doy?"
@@ -75,7 +75,8 @@ cases:
     expected_kind_in_filter: null
     expected_decision: answered
     expected_substrings:
-      - "comparativo"
+      - "comparativa comercial"
+      - "MARVO"
 
   - id: protocol-dapp
     query: "Cual es el protocolo para DAPP?"

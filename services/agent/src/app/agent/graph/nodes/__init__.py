@@ -5,6 +5,7 @@ from app.agent.graph.nodes.calculator import DoseCalculatorNode
 from app.agent.graph.nodes.commercial_comparison_diff import (
     CommercialComparisonDiffNode,
 )
+from app.agent.graph.nodes.comparison_redactor import ComparisonRedactorNode
 from app.agent.graph.nodes.competitor_resolver import CompetitorResolverNode
 from app.agent.graph.nodes.hybrid_retriever import HybridRetrieverNode
 from app.agent.graph.nodes.intent_classifier import IntentClassifierNode
@@ -18,6 +19,7 @@ from app.agent.graph.nodes.weight_species_extractor import (
 __all__ = [
     "AnswererNode",
     "CommercialComparisonDiffNode",
+    "ComparisonRedactorNode",
     "CompetitorResolverNode",
     "DoseCalculatorNode",
     "HybridRetrieverNode",

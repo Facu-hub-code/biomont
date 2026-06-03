@@ -5,10 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from biomont_common.db.comparison_repository import (
-    ComparisonRepository,
-    format_comparison_diff,
-)
+from biomont_common.db.comparison_repository import ComparisonRepository
 
 from app.agent.graph.nodes._helpers import trace_node
 
@@ -78,8 +75,8 @@ class CommercialComparisonDiffNode:
                 result["outcome"] = "competitor_row_missing"
                 return updates
 
-            updates["answer_text"] = format_comparison_diff(diff)
-            updates["structured_response"] = True
+            updates["comparison_diff"] = diff.model_dump(mode="json")
+            updates["comparison_diff_version"] = diff.published_version
             result["outcome"] = "diff_ready"
             result["payload"] = {
                 "differences_count": len(diff.differences),
