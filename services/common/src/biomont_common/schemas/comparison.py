@@ -38,12 +38,20 @@ class ComparisonDiffItem(BaseModel):
     sort_order: int = 0
 
 
+class ComparisonSimilarityItem(BaseModel):
+    column_key: str
+    header_label: str
+    shared_value: str
+    sort_order: int = 0
+
+
 class ComparisonDiffResult(BaseModel):
     subject_product_id: UUID
     subject_name: str
     competitor_name: str
     published_version: int
     differences: list[ComparisonDiffItem]
+    similarities: list[ComparisonSimilarityItem] = Field(default_factory=list)
 
 
 class ComparisonRedactorItem(BaseModel):
@@ -63,6 +71,7 @@ class ComparisonRedactorInput(BaseModel):
     focus_column_key: str | None = None
     highlight_items: list[ComparisonRedactorItem]
     items: list[ComparisonRedactorItem]
+    similarity_items: list[ComparisonRedactorItem] = Field(default_factory=list)
     other_items_count: int
 
 
@@ -72,7 +81,9 @@ class ComparisonRedactorBullet(BaseModel):
 
 
 class ComparisonRedactorOutput(BaseModel):
-    opening: str
-    bullets: list[ComparisonRedactorBullet]
+    paragraphs: list[str] = Field(default_factory=list)
+    opening: str = ""
+    bullets: list[ComparisonRedactorBullet] = Field(default_factory=list)
+    follow_up_hint: str | None = None
     closing_hint: str | None = None
     footer: str

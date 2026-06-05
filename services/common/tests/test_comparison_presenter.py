@@ -1,4 +1,4 @@
-"""Tests del presenter del comparador (spec 013)."""
+"""Tests del presenter del comparador (spec 013 + 014)."""
 
 from uuid import uuid4
 
@@ -6,6 +6,7 @@ from biomont_common.comparison.presenter import (
     build_redactor_input,
     detect_presentation_mode,
     format_comparison_diff_brief,
+    format_comparison_narrative_brief,
     format_focus_no_difference,
 )
 from biomont_common.comparison.redactor_validate import validate_redactor_output
@@ -16,10 +17,14 @@ from biomont_common.schemas.comparison import (
     ComparisonRedactorInput,
     ComparisonRedactorItem,
     ComparisonRedactorOutput,
+    ComparisonSimilarityItem,
 )
 
 
-def _diff(*items: tuple[str, str, str, str]) -> ComparisonDiffResult:
+def _diff(
+    *items: tuple[str, str, str, str],
+    similarities: list[tuple[str, str, str]] | None = None,
+) -> ComparisonDiffResult:
     differences = [
         ComparisonDiffItem(
             column_key=key,
@@ -30,12 +35,22 @@ def _diff(*items: tuple[str, str, str, str]) -> ComparisonDiffResult:
         )
         for i, (key, label, subj, comp) in enumerate(items)
     ]
+    sims = [
+        ComparisonSimilarityItem(
+            column_key=key,
+            header_label=label,
+            shared_value=val,
+            sort_order=i,
+        )
+        for i, (key, label, val) in enumerate(similarities or [])
+    ]
     return ComparisonDiffResult(
         subject_product_id=uuid4(),
         subject_name="MARVO 20",
         competitor_name="MARBOXI",
         published_version=1,
         differences=differences,
+        similarities=sims,
     )
 
 
@@ -56,18 +71,23 @@ def test_detect_presentation_mode_full() -> None:
     assert mode == "full"
 
 
-def test_build_redactor_input_summary_limits_highlights() -> None:
+def test_build_redactor_input_summary_includes_similarities() -> None:
     diff = _diff(
         ("formula", "FÓRMULA", "A", "B"),
         ("dosis", "DOSIS", "C", "D"),
         ("pais", "PAIS", "PE", "PE2"),
         ("precauciones", "PRECAUCIONES", "x" * 400, "y" * 400),
+        similarities=[
+            ("via_de_adm", "VÍA DE ADM", "Oral"),
+            ("especies_de_destino", "ESPECIES", "Perros"),
+        ],
     )
     inp = build_redactor_input(diff, "comparar")
     assert inp.presentation_mode == "summary"
-    assert len(inp.highlight_items) <= 5
-    assert inp.other_items_count >= 1
+    assert len(inp.similarity_items) <= 3
+    assert len(inp.items) <= 3
     assert all(i.tier <= 2 for i in inp.items)
+    assert inp.other_items_count >= 1
 
 
 def test_build_redactor_input_focus_filters_column() -> None:
@@ -91,21 +111,13 @@ def test_format_focus_no_difference() -> None:
     assert "coincide" in text.lower()
 
 
-def test_validate_rejects_blocked_word() -> None:
+def test_validate_summary_rejects_blocked_word() -> None:
     inp = ComparisonRedactorInput(
         subject_name="A",
         competitor_name="B",
         published_version=1,
         presentation_mode="summary",
-        highlight_items=[
-            ComparisonRedactorItem(
-                column_key="dosis",
-                header_label="DOSIS",
-                tier=1,
-                subject_snippet="1 ml/10 kg",
-                competitor_snippet="2 ml/10 kg",
-            )
-        ],
+        highlight_items=[],
         items=[
             ComparisonRedactorItem(
                 column_key="dosis",
@@ -115,16 +127,11 @@ def test_validate_rejects_blocked_word() -> None:
                 competitor_snippet="2 ml/10 kg",
             )
         ],
+        similarity_items=[],
         other_items_count=0,
     )
     out = ComparisonRedactorOutput(
-        opening="Comparacion",
-        bullets=[
-            ComparisonRedactorBullet(
-                column_key="dosis",
-                text="Es mejor el producto A con 1 ml/10 kg",
-            )
-        ],
+        paragraphs=["Es mejor el producto A con 1 ml/10 kg"],
         footer="Fuente: comparativa comercial Biomont (v1).",
     )
     ok, reason = validate_redactor_output(out, inp)
@@ -132,12 +139,12 @@ def test_validate_rejects_blocked_word() -> None:
     assert reason and "blocked" in reason
 
 
-def test_validate_rejects_novel_numeric() -> None:
+def test_validate_focus_rejects_novel_numeric() -> None:
     inp = ComparisonRedactorInput(
         subject_name="A",
         competitor_name="B",
         published_version=1,
-        presentation_mode="summary",
+        presentation_mode="focus",
         highlight_items=[],
         items=[
             ComparisonRedactorItem(
@@ -165,11 +172,24 @@ def test_validate_rejects_novel_numeric() -> None:
     assert reason and "novel_numeric" in reason
 
 
-def test_brief_includes_other_count_hint() -> None:
+def test_narrative_brief_covers_similarities_and_differences() -> None:
     diff = _diff(
         ("formula", "FÓRMULA", "A", "B"),
         ("precauciones", "PRECAUCIONES", "long", "longer"),
+        similarities=[("via_de_adm", "VÍA DE ADM", "Oral")],
     )
     inp = build_redactor_input(diff, "comparar")
-    text = format_comparison_diff_brief(inp)
-    assert "diferencias más" in text
+    text = format_comparison_narrative_brief(inp)
+    assert "comparten" in text.lower()
+    assert "distinguen" in text.lower()
+    assert "diferencias más" in text.lower() or "más detalle" in text.lower()
+
+
+def test_narrative_brief_similarities_only() -> None:
+    diff = _diff(
+        similarities=[("via_de_adm", "VÍA DE ADM", "Oral")],
+    )
+    inp = build_redactor_input(diff, "comparar")
+    text = format_comparison_narrative_brief(inp)
+    assert "comparten" in text.lower()
+    assert "No se registran diferencias" in text

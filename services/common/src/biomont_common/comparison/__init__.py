@@ -5,6 +5,7 @@ from biomont_common.comparison.presenter import (
     detect_presentation_mode,
     format_comparison_diff_brief,
     format_comparison_diff_full,
+    format_comparison_narrative_brief,
     format_focus_no_difference,
     render_redactor_output,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "detect_presentation_mode",
     "format_comparison_diff_brief",
     "format_comparison_diff_full",
+    "format_comparison_narrative_brief",
     "format_focus_no_difference",
     "render_redactor_output",
     "validate_redactor_output",

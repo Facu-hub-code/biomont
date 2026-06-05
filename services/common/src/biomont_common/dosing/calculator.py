@@ -181,23 +181,163 @@ def calculate_dose(
     )
 
 
-def format_dose_response(result: DoseCalculationResult) -> str:
-    """Plantilla fija de respuesta con formula y valores usados."""
+_SPECIES_LABELS: dict[str, str] = {
+    "canine": "perro",
+    "feline": "gato",
+    "bovine": "vaca",
+    "porcine": "cerdo",
+    "calf": "ternero",
+    "equine": "equino",
+    "ovine": "ovino",
+}
 
+
+def _species_article(species: str) -> str:
+    label = _SPECIES_LABELS.get(species, species)
+    if label == "vaca":
+        return f"una {label}"
+    return f"un {label}"
+
+
+def _clean_rule_label(label: str | None) -> str | None:
+    if not label:
+        return None
+    cleaned = label.split("—")[0].split(" - FT")[0].strip()
+    if not cleaned:
+        return None
+    return cleaned.replace("comp/", "comprimido cada ").replace("comp", "comprimido")
+
+
+def _formula_rate_text(result: DoseCalculationResult) -> str | None:
+    from_label = _clean_rule_label(result.rule_label)
+    if from_label:
+        return from_label
+
+    description = (result.formula_description or "").removesuffix(" de peso vivo")
+    if not description:
+        return None
+    return (
+        description.replace("tablets", "comprimidos")
+        .replace("tablet", "comprimido")
+        .replace("/", " por cada ")
+    )
+
+
+def _format_weight_kg(weight: Decimal) -> str:
+    if weight == weight.to_integral_value():
+        return str(int(weight))
+    text = format(weight.normalize(), "f").rstrip("0").rstrip(".")
+    return text.replace(".", ",")
+
+
+def _format_decimal_es(value: Decimal) -> str:
+    if value == value.to_integral_value():
+        return str(int(value))
+    text = format(value.normalize(), "f").rstrip("0").rstrip(".")
+    return text.replace(".", ",")
+
+
+def _weight_band_range_text(weight_band: str | None) -> str | None:
+    if not weight_band:
+        return None
+    cleaned = weight_band.replace(" kg", "").replace("–", "-")
+    parts = [p.strip() for p in cleaned.split("-", maxsplit=1)]
+    if len(parts) != 2 or not all(parts):
+        return None
+    return f"indicado para pesos entre {parts[0]} y {parts[1]} kg"
+
+
+def _format_tablets_human(value: Decimal) -> str:
+    amount = value.quantize(Decimal("0.01"))
+    whole = int(amount)
+    fraction = amount - Decimal(whole)
+
+    if fraction == Decimal("0.5"):
+        if whole == 0:
+            return "medio comprimido"
+        if whole == 1:
+            return "1 comprimido y medio"
+        return f"{whole} comprimidos y medio"
+
+    if fraction == Decimal("0"):
+        if whole == 1:
+            return "1 comprimido"
+        return f"{whole} comprimidos"
+
+    return f"{_format_decimal_es(amount)} comprimidos"
+
+
+def _format_weight_band_response(result: DoseCalculationResult) -> str:
+    subject = _species_article(result.species)
+    weight = _format_weight_kg(result.weight_kg)
+    product = result.product_name
+    range_hint = _weight_band_range_text(result.weight_band)
+
+    if result.output_unit == DosingOutputUnit.mg:
+        strength = _format_decimal_es(result.output_value)
+        presentation = result.rule_label or f"presentación de {strength} mg"
+        main = (
+            f"Para {subject} de {weight} kg, corresponde *{product}* "
+            f"en **{presentation}**"
+        )
+        if range_hint:
+            main += f" ({range_hint})"
+        return f"{main}.\n\nSegún documentación validada Biomont."
+
+    if result.output_unit == DosingOutputUnit.tablets:
+        dose = _format_tablets_human(result.output_value)
+        main = f"Para {subject} de {weight} kg, la dosis de *{product}* es **{dose}**"
+        if range_hint:
+            main += f" ({range_hint})"
+        return f"{main}.\n\nSegún documentación validada Biomont."
+
+    amount = _format_decimal_es(result.output_value)
     unit = result.output_unit.value
-    lines = [
-        f"Para un/a {result.species} de **{result.weight_kg} kg** y el producto "
-        f"**{result.product_name}**:",
-        f"- Regla aplicada: {result.formula_description}",
-    ]
-    if result.rule_label:
-        lines.append(f"- Presentacion/indicacion: **{result.rule_label}**")
-    if result.weight_band:
-        lines.append(f"- Banda de peso: {result.weight_band}")
-    lines.append(
-        f"- Resultado: **{result.output_value} {unit}**"
+    main = (
+        f"Para {subject} de {weight} kg, la dosis de *{product}* "
+        f"es **{amount} {unit}**"
     )
-    lines.append(
-        f"Fuente: Motor de calculo de dosis (version {result.published_version})."
+    if range_hint:
+        main += f" ({range_hint})"
+    return f"{main}.\n\nSegún documentación validada Biomont."
+
+
+def _format_formula_response(result: DoseCalculationResult) -> str:
+    subject = _species_article(result.species)
+    weight = _format_weight_kg(result.weight_kg)
+    product = result.product_name
+    rate = _formula_rate_text(result)
+
+    if result.output_unit == DosingOutputUnit.tablets:
+        dose = _format_tablets_human(result.output_value)
+        main = f"Para {subject} de {weight} kg, la dosis de *{product}* es **{dose}**"
+        if rate:
+            main += f" ({rate})"
+        return f"{main}.\n\nSegún documentación validada Biomont."
+
+    if result.output_unit == DosingOutputUnit.ml:
+        amount = _format_decimal_es(result.output_value)
+        main = (
+            f"Para {subject} de {weight} kg, administrar **{amount} ml** "
+            f"de *{product}*"
+        )
+        if rate:
+            main += f" ({rate})"
+        return f"{main}.\n\nSegún documentación validada Biomont."
+
+    amount = _format_decimal_es(result.output_value)
+    main = (
+        f"Para {subject} de {weight} kg, la dosis de *{product}* "
+        f"es **{amount} mg**"
     )
-    return "\n".join(lines)
+    if rate:
+        main += f" ({rate})"
+    return f"{main}.\n\nSegún documentación validada Biomont."
+
+
+def format_dose_response(result: DoseCalculationResult) -> str:
+    """Plantilla legible para WhatsApp a partir del resultado determinista."""
+
+    if result.rule_type == DosingRuleType.weight_band:
+        return _format_weight_band_response(result)
+    return _format_formula_response(result)

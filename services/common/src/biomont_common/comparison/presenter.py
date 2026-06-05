@@ -1,4 +1,4 @@
-"""Pre-procesamiento y formateo del comparador comercial (spec 013)."""
+"""Pre-procesamiento y formateo del comparador comercial (spec 013 + 014)."""
 
 from __future__ import annotations
 
@@ -11,11 +11,16 @@ from biomont_common.schemas.comparison import (
     ComparisonRedactorInput,
     ComparisonRedactorItem,
     ComparisonRedactorOutput,
+    ComparisonSimilarityItem,
 )
 
 SNIPPET_MAX_LEN = 280
 BRIEF_VALUE_MAX_LEN = 200
+NARRATIVE_VALUE_MAX_LEN = 90
 HIGHLIGHT_MAX = 5
+NARRATIVE_SUMMARY_MAX_SIM = 3
+NARRATIVE_SUMMARY_MAX_DIFF = 3
+SUMMARY_BODY_MAX_LEN = 700
 
 # tier 1 = destacada, 4 = detalle largo
 _COLUMN_TIER: dict[str, int] = {
@@ -110,6 +115,13 @@ def _snippet(value: str, *, max_len: int = SNIPPET_MAX_LEN) -> tuple[str, bool]:
     return text[: max_len - 1].rstrip() + "…", True
 
 
+def _truncate(value: str, max_len: int) -> str:
+    text = (value or "").strip()
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "…"
+
+
 def _to_redactor_item(item: ComparisonDiffItem) -> ComparisonRedactorItem:
     subj, subj_trunc = _snippet(item.subject_value)
     comp, comp_trunc = _snippet(item.competitor_value)
@@ -123,16 +135,43 @@ def _to_redactor_item(item: ComparisonDiffItem) -> ComparisonRedactorItem:
     )
 
 
+def _to_similarity_redactor_item(item: ComparisonSimilarityItem) -> ComparisonRedactorItem:
+    shared, truncated = _snippet(item.shared_value)
+    return ComparisonRedactorItem(
+        column_key=item.column_key,
+        header_label=item.header_label,
+        tier=tier_for_column_key(item.column_key),
+        subject_snippet=shared,
+        competitor_snippet=shared,
+        truncated=truncated,
+    )
+
+
+def _sort_similarities(
+    similarities: list[ComparisonSimilarityItem],
+) -> list[ComparisonRedactorItem]:
+    ordered = sorted(
+        similarities,
+        key=lambda s: (tier_for_column_key(s.column_key), s.sort_order),
+    )
+    return [_to_similarity_redactor_item(s) for s in ordered]
+
+
+def _sort_differences(diff: ComparisonDiffResult) -> list[ComparisonRedactorItem]:
+    items_sorted = sorted(
+        diff.differences,
+        key=lambda d: (tier_for_column_key(d.column_key), d.sort_order),
+    )
+    return [_to_redactor_item(d) for d in items_sorted]
+
+
 def build_redactor_input(
     diff: ComparisonDiffResult,
     query: str,
 ) -> ComparisonRedactorInput:
     mode, focus_key = detect_presentation_mode(query)
-    items_sorted = sorted(
-        diff.differences,
-        key=lambda d: (tier_for_column_key(d.column_key), d.sort_order),
-    )
-    all_redactor = [_to_redactor_item(d) for d in items_sorted]
+    all_redactor = _sort_differences(diff)
+    all_similarities = _sort_similarities(diff.similarities)
 
     if mode == "focus" and focus_key:
         focus_items = [r for r in all_redactor if r.column_key == focus_key]
@@ -145,6 +184,7 @@ def build_redactor_input(
             focus_column_key=focus_key,
             highlight_items=focus_items[:1],
             items=focus_items,
+            similarity_items=[],
             other_items_count=other,
         )
 
@@ -157,11 +197,13 @@ def build_redactor_input(
             focus_column_key=None,
             highlight_items=all_redactor[:HIGHLIGHT_MAX],
             items=all_redactor,
+            similarity_items=all_similarities,
             other_items_count=0,
         )
 
-    highlights = [r for r in all_redactor if r.tier <= 2][:HIGHLIGHT_MAX]
-    highlight_keys = {h.column_key for h in highlights}
+    summary_sims = [s for s in all_similarities if s.tier <= 2][:NARRATIVE_SUMMARY_MAX_SIM]
+    summary_diffs = [d for d in all_redactor if d.tier <= 2][:NARRATIVE_SUMMARY_MAX_DIFF]
+    highlight_keys = {d.column_key for d in summary_diffs}
     other_count = len(all_redactor) - len(highlight_keys)
     return ComparisonRedactorInput(
         subject_name=diff.subject_name,
@@ -169,8 +211,9 @@ def build_redactor_input(
         published_version=diff.published_version,
         presentation_mode="summary",
         focus_column_key=None,
-        highlight_items=highlights,
-        items=highlights,
+        highlight_items=summary_diffs,
+        items=summary_diffs,
+        similarity_items=summary_sims,
         other_items_count=max(0, other_count),
     )
 
@@ -196,12 +239,86 @@ def format_focus_no_difference(
     )
 
 
+def _join_similarity_phrase(
+    redactor_input: ComparisonRedactorInput,
+    *,
+    value_max_len: int = NARRATIVE_VALUE_MAX_LEN,
+) -> str | None:
+    sims = redactor_input.similarity_items
+    if not sims:
+        return None
+    parts: list[str] = []
+    for item in sims:
+        val = _truncate(item.subject_snippet, value_max_len)
+        parts.append(f"**{item.header_label.lower()}** ({val})")
+    joined = "; ".join(parts)
+    return (
+        f"**{redactor_input.subject_name}** y **{redactor_input.competitor_name}** "
+        f"comparten {joined} según el cuadro comercial."
+    )
+
+
+def _join_difference_phrase(
+    redactor_input: ComparisonRedactorInput,
+    *,
+    value_max_len: int = NARRATIVE_VALUE_MAX_LEN,
+) -> str | None:
+    diffs = redactor_input.items or redactor_input.highlight_items
+    if not diffs:
+        return None
+    parts: list[str] = []
+    for item in diffs:
+        subj = _truncate(item.subject_snippet, value_max_len)
+        comp = _truncate(item.competitor_snippet, value_max_len)
+        parts.append(
+            f"**{item.header_label.lower()}** "
+            f"({redactor_input.subject_name}: {subj}; "
+            f"{redactor_input.competitor_name}: {comp})"
+        )
+    return f"Se distinguen principalmente en {'; '.join(parts)}."
+
+
+def format_comparison_narrative_brief(
+    redactor_input: ComparisonRedactorInput,
+) -> str:
+    """Fallback narrativo para modo summary (spec 014)."""
+
+    paragraphs: list[str] = []
+    sim_p = _join_similarity_phrase(redactor_input)
+    diff_p = _join_difference_phrase(redactor_input)
+    if sim_p:
+        paragraphs.append(sim_p)
+    if diff_p:
+        paragraphs.append(diff_p)
+    if not paragraphs:
+        paragraphs.append(
+            "No se encontraron campos comparables con datos en el cuadro comercial."
+        )
+    elif not diff_p and sim_p:
+        paragraphs.append(
+            "No se registran diferencias en los ejes clínicos principales del cuadro."
+        )
+
+    lines = list(paragraphs)
+    if redactor_input.other_items_count > 0:
+        lines.append("")
+        lines.append(
+            "Hay más detalle en el cuadro (precauciones, indicaciones, etc.). "
+            "Preguntá por un tema concreto: dosis, fórmula, precauciones…"
+        )
+    lines.append("")
+    lines.append(
+        f"Fuente: comparativa comercial Biomont (v{redactor_input.published_version})."
+    )
+    return "\n".join(lines)
+
+
 def format_comparison_diff_brief(
     redactor_input: ComparisonRedactorInput,
     *,
     value_max_len: int = BRIEF_VALUE_MAX_LEN,
 ) -> str:
-    """Fallback determinista (spec 013 RF-10)."""
+    """Fallback determinista por columna (modo focus)."""
 
     lines = [
         f"Comparando **{redactor_input.subject_name}** con "
@@ -247,12 +364,23 @@ def format_comparison_diff_full(diff: ComparisonDiffResult) -> str:
 
 
 def render_redactor_output(output: ComparisonRedactorOutput) -> str:
+    if output.paragraphs:
+        lines = [p.strip() for p in output.paragraphs if p.strip()]
+        hint = output.follow_up_hint or output.closing_hint
+        if hint:
+            lines.append("")
+            lines.append(hint.strip())
+        lines.append("")
+        lines.append(output.footer.strip())
+        return "\n".join(lines)
+
     lines = [output.opening.strip(), ""]
     for bullet in output.bullets:
         lines.append(f"- {bullet.text.strip()}")
-    if output.closing_hint:
+    hint = output.follow_up_hint or output.closing_hint
+    if hint:
         lines.append("")
-        lines.append(output.closing_hint.strip())
+        lines.append(hint.strip())
     lines.append("")
     lines.append(output.footer.strip())
     return "\n".join(lines)
@@ -263,6 +391,15 @@ def redactor_user_payload(redactor_input: ComparisonRedactorInput, query: str) -
 
     import json
 
+    def _item_dict(i: ComparisonRedactorItem) -> dict:
+        return {
+            "column_key": i.column_key,
+            "header_label": i.header_label,
+            "tier": i.tier,
+            "subject_snippet": i.subject_snippet,
+            "competitor_snippet": i.competitor_snippet,
+        }
+
     payload = {
         "user_query": query,
         "presentation_mode": redactor_input.presentation_mode,
@@ -270,15 +407,7 @@ def redactor_user_payload(redactor_input: ComparisonRedactorInput, query: str) -
         "competitor_name": redactor_input.competitor_name,
         "published_version": redactor_input.published_version,
         "other_items_count": redactor_input.other_items_count,
-        "items": [
-            {
-                "column_key": i.column_key,
-                "header_label": i.header_label,
-                "tier": i.tier,
-                "subject_snippet": i.subject_snippet,
-                "competitor_snippet": i.competitor_snippet,
-            }
-            for i in redactor_input.items
-        ],
+        "similarity_items": [_item_dict(i) for i in redactor_input.similarity_items],
+        "difference_items": [_item_dict(i) for i in redactor_input.items],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)

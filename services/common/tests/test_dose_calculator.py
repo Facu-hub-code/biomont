@@ -61,7 +61,88 @@ def test_weight_band_lookup_center() -> None:
     )
     assert not isinstance(result, DoseCalculationError)
     assert result.output_value == Decimal("1000.00")
-    assert "1000 mg" in format_dose_response(result)
+    text = format_dose_response(result)
+    assert "1000 mg" in text
+    assert "perro" in text
+    assert "Proteggo 3M" in text
+    assert "20 y 40 kg" in text
+    assert "Regla aplicada" not in text
+    assert "Motor de calculo" not in text
+
+
+def test_format_dose_response_formula_tablets() -> None:
+    profile = _profile()
+    rules = [
+        DosingRule(
+            id=uuid4(),
+            profile_id=uuid4(),
+            rule_type=DosingRuleType.formula,
+            formula_numerator=Decimal("1"),
+            formula_denominator=Decimal("10"),
+            formula_per_kg=True,
+            output_unit=DosingOutputUnit.tablets,
+            published_version=1,
+            label="1 comp/10 kg",
+        )
+    ]
+    result = calculate_dose(
+        profile=profile,
+        rules=rules,
+        product_id=profile.product_id,
+        product_name="Marvo 20",
+        weight_kg=Decimal("25"),
+        species="canine",
+    )
+    assert not isinstance(result, DoseCalculationError)
+    text = format_dose_response(result)
+    assert "2 comprimidos y medio" in text
+    assert "Marvo 20" in text
+
+
+def test_format_dose_response_formula_ml() -> None:
+    profile = _profile(species="bovine")
+    rules = [
+        DosingRule(
+            id=uuid4(),
+            profile_id=uuid4(),
+            rule_type=DosingRuleType.formula,
+            formula_numerator=Decimal("1"),
+            formula_denominator=Decimal("1"),
+            formula_per_kg=True,
+            output_unit=DosingOutputUnit.ml,
+            published_version=1,
+            label="1 ml/kg",
+        )
+    ]
+    result = calculate_dose(
+        profile=profile,
+        rules=rules,
+        product_id=profile.product_id,
+        product_name="Tulaviot",
+        weight_kg=Decimal("450"),
+        species="bovine",
+    )
+    assert not isinstance(result, DoseCalculationError)
+    text = format_dose_response(result)
+    assert "450 ml" in text
+    assert "vaca" in text
+    assert "Tulaviot" in text
+
+
+def test_format_dose_response_weight_band_tablets() -> None:
+    profile = _profile()
+    rules = [_band_rule("0", "10", "0.5", unit=DosingOutputUnit.tablets)]
+    result = calculate_dose(
+        profile=profile,
+        rules=rules,
+        product_id=profile.product_id,
+        product_name="mascotabs",
+        weight_kg=Decimal("8"),
+        species="canine",
+    )
+    assert not isinstance(result, DoseCalculationError)
+    text = format_dose_response(result)
+    assert "medio comprimido" in text
 
 
 def test_weight_band_border_inclusive() -> None:

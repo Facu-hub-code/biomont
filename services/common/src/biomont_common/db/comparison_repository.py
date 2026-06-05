@@ -12,6 +12,7 @@ from biomont_common.schemas.comparison import (
     ComparisonDiffItem,
     ComparisonDiffResult,
     ComparisonRow,
+    ComparisonSimilarityItem,
     Competitor,
 )
 
@@ -210,12 +211,21 @@ class ComparisonRepository:
             return None
 
         differences: list[ComparisonDiffItem] = []
+        similarities: list[ComparisonSimilarityItem] = []
         for col in columns:
             subj_val = (subject_row.cells.get(col.column_key) or "").strip()
             comp_val = (competitor_row.cells.get(col.column_key) or "").strip()
             if not subj_val and not comp_val:
                 continue
             if subj_val == comp_val:
+                similarities.append(
+                    ComparisonSimilarityItem(
+                        column_key=col.column_key,
+                        header_label=col.header_label,
+                        shared_value=subj_val,
+                        sort_order=col.sort_order,
+                    )
+                )
                 continue
             differences.append(
                 ComparisonDiffItem(
@@ -233,6 +243,7 @@ class ComparisonRepository:
             competitor_name=competitor_row.display_name,
             published_version=version,
             differences=differences,
+            similarities=similarities,
         )
 
 

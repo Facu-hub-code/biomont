@@ -29,6 +29,7 @@ este directorio.
 | 011 | [Motor de calculo de dosis (datos estructurados + backoffice)](./011-dose-calculation-engine.md) | en curso |
 | 012 | [Comparador comercial (columnas dinamicas por documento)](./012-competitor-comparison-hybrid.md) | en curso |
 | 013 | [Comparador comercial: redaccion con LLM (diff determinista)](./013-comparison-llm-redactor.md) | en curso |
+| 014 | [Comparador comercial: resumen narrativo (similitudes + diferencias)](./014-comparison-narrative-summary.md) | implementada |
 
 ## Reglas de calidad
 

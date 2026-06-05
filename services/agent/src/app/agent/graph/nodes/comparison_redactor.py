@@ -1,4 +1,4 @@
-"""ComparisonRedactor: redaccion LLM sobre diff determinista (spec 013)."""
+"""ComparisonRedactor: redaccion LLM sobre diff determinista (spec 013 + 014)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from biomont_common.comparison.presenter import (
     build_redactor_input,
     format_comparison_diff_brief,
     format_comparison_diff_full,
+    format_comparison_narrative_brief,
     format_focus_no_difference,
     redactor_user_payload,
     render_redactor_output,
@@ -53,6 +54,7 @@ class ComparisonRedactorNode:
                 "presentation_mode": redactor_input.presentation_mode,
                 "focus_column_key": redactor_input.focus_column_key,
                 "items_sent": len(redactor_input.items),
+                "similarity_items_sent": len(redactor_input.similarity_items),
                 "other_items_count": redactor_input.other_items_count,
                 "llm_used": False,
             }
@@ -63,10 +65,15 @@ class ComparisonRedactorNode:
                 and not redactor_input.items
             ):
                 label = None
-                for d in diff.differences:
-                    if d.column_key == redactor_input.focus_column_key:
-                        label = d.header_label
+                for s in diff.similarities:
+                    if s.column_key == redactor_input.focus_column_key:
+                        label = s.header_label
                         break
+                if label is None:
+                    for d in diff.differences:
+                        if d.column_key == redactor_input.focus_column_key:
+                            label = d.header_label
+                            break
                 updates["answer_text"] = format_focus_no_difference(
                     subject_name=diff.subject_name,
                     competitor_name=diff.competitor_name,
@@ -77,8 +84,10 @@ class ComparisonRedactorNode:
                 result["outcome"] = "focus_no_difference"
                 return updates
 
-            if not diff.differences:
-                updates["answer_text"] = format_comparison_diff_brief(redactor_input)
+            if not diff.differences and not diff.similarities:
+                updates["answer_text"] = format_comparison_narrative_brief(
+                    redactor_input
+                )
                 updates["structured_response"] = True
                 result["outcome"] = "empty_diff"
                 return updates
@@ -108,7 +117,7 @@ class ComparisonRedactorNode:
                 result["payload"]["validation_passed"] = False
                 result["payload"]["validation_reason"] = reason
 
-            updates["answer_text"] = format_comparison_diff_brief(redactor_input)
+            updates["answer_text"] = _deterministic_format(diff, redactor_input)
             updates["structured_response"] = True
             result["outcome"] = "fallback_deterministic"
         return updates
@@ -152,4 +161,6 @@ class ComparisonRedactorNode:
 def _deterministic_format(diff: ComparisonDiffResult, redactor_input) -> str:
     if redactor_input.presentation_mode == "full":
         return format_comparison_diff_full(diff)
+    if redactor_input.presentation_mode == "summary":
+        return format_comparison_narrative_brief(redactor_input)
     return format_comparison_diff_brief(redactor_input)

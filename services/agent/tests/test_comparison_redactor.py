@@ -10,8 +10,8 @@ from biomont_common.schemas.agent_graph import Intent
 from biomont_common.schemas.comparison import (
     ComparisonDiffItem,
     ComparisonDiffResult,
-    ComparisonRedactorBullet,
     ComparisonRedactorOutput,
+    ComparisonSimilarityItem,
 )
 from biomont_common.schemas.products import ProductCandidate
 from biomont_common.settings import RagSettings
@@ -46,24 +46,16 @@ class _FakeChatComparison:
     def __init__(self):
         self._intent = Intent.comparison_with_competitor
         self._redactor_out = ComparisonRedactorOutput(
-            opening="Comparacion entre MARVO 20 y MARBOXI.",
-            bullets=[
-                ComparisonRedactorBullet(
-                    column_key="dosis",
-                    text=(
-                        "MARVO 20: 1 tableta/10 kg. "
-                        "MARBOXI: 2.75 a 5.5 mg/kg."
-                    ),
+            paragraphs=[
+                (
+                    "MARVO 20 y MARBOXI comparten vía oral según el cuadro comercial."
                 ),
-                ComparisonRedactorBullet(
-                    column_key="formula",
-                    text=(
-                        "MARVO 20: 20 mg marbofloxacina por tableta. "
-                        "MARBOXI: presentaciones 25/50/100 mg."
-                    ),
+                (
+                    "Se distinguen en dosis: MARVO 20 indica 1 tableta/10 kg "
+                    "y MARBOXI 2.75 a 5.5 mg/kg."
                 ),
             ],
-            closing_hint="Hay 2 diferencias mas en el cuadro.",
+            follow_up_hint="Hay más detalle en el cuadro.",
             footer="Fuente: comparativa comercial Biomont (v1).",
         )
 
@@ -124,6 +116,14 @@ class _ComparisonRepoWithDiff:
                     sort_order=4,
                 ),
             ],
+            similarities=[
+                ComparisonSimilarityItem(
+                    column_key="via_de_adm",
+                    header_label="VÍA DE ADM",
+                    shared_value="Oral",
+                    sort_order=2,
+                ),
+            ],
         )
 
 
@@ -162,7 +162,7 @@ async def test_graph_comparison_runs_redactor_node():
     assert "ComparisonRedactor" in nodes
     assert "Answerer" not in nodes
     assert output.answer_text
-    assert "dosis" in output.answer_text.lower() or "DOSIS" in output.answer_text
+    assert "dosis" in output.answer_text.lower() or "comparten" in output.answer_text.lower()
     assert "comparativa comercial" in output.answer_text.lower()
 
 
@@ -199,3 +199,4 @@ async def test_graph_comparison_flag_off_uses_deterministic_brief():
     trace = next(t for t in output.graph_trace if t.node == "ComparisonRedactor")
     assert trace.outcome in ("deterministic_flag_off", "fallback_deterministic")
     assert "MARVO 20" in (output.answer_text or "")
+    assert "comparten" in (output.answer_text or "").lower()
