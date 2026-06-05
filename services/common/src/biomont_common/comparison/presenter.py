@@ -20,7 +20,7 @@ NARRATIVE_VALUE_MAX_LEN = 90
 HIGHLIGHT_MAX = 5
 NARRATIVE_SUMMARY_MAX_SIM = 3
 NARRATIVE_SUMMARY_MAX_DIFF = 3
-SUMMARY_BODY_MAX_LEN = 700
+SUMMARY_BODY_MAX_LEN = 900
 
 # tier 1 = destacada, 4 = detalle largo
 _COLUMN_TIER: dict[str, int] = {
@@ -270,11 +270,7 @@ def _join_difference_phrase(
     for item in diffs:
         subj = _truncate(item.subject_snippet, value_max_len)
         comp = _truncate(item.competitor_snippet, value_max_len)
-        parts.append(
-            f"**{item.header_label.lower()}** "
-            f"({redactor_input.subject_name}: {subj}; "
-            f"{redactor_input.competitor_name}: {comp})"
-        )
+        parts.append(f"**{item.header_label.lower()}** ({subj} vs {comp})")
     return f"Se distinguen principalmente en {'; '.join(parts)}."
 
 
@@ -361,6 +357,31 @@ def format_comparison_diff_full(diff: ComparisonDiffResult) -> str:
     from biomont_common.db.comparison_repository import format_comparison_diff
 
     return format_comparison_diff(diff)
+
+
+def normalize_summary_output(
+    output: ComparisonRedactorOutput,
+    presentation_mode: str,
+) -> ComparisonRedactorOutput:
+    """Convierte opening+bullets legacy a paragraphs en modo summary."""
+
+    if presentation_mode != "summary":
+        return output
+    if any(p.strip() for p in output.paragraphs):
+        return output
+
+    paragraphs: list[str] = []
+    if output.opening.strip():
+        paragraphs.append(output.opening.strip())
+    if output.bullets:
+        bullet_text = " ".join(b.text.strip() for b in output.bullets[:3] if b.text.strip())
+        if bullet_text:
+            paragraphs.append(bullet_text)
+    if not paragraphs:
+        return output
+    return output.model_copy(
+        update={"paragraphs": paragraphs[:2], "opening": "", "bullets": []}
+    )
 
 
 def render_redactor_output(output: ComparisonRedactorOutput) -> str:

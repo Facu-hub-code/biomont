@@ -239,12 +239,21 @@ class ComparisonRepository:
 
         return ComparisonDiffResult(
             subject_product_id=subject_product_id,
-            subject_name=subject_row.display_name,
-            competitor_name=competitor_row.display_name,
+            subject_name=_clean_comparison_label(subject_product_name)
+            or _clean_comparison_label(subject_row.display_name),
+            competitor_name=_clean_comparison_label(competitor_name)
+            or _clean_comparison_label(competitor_row.display_name),
             published_version=version,
             differences=differences,
             similarities=similarities,
         )
+
+
+def _clean_comparison_label(name: str) -> str:
+    """Primera linea del display name (evita volcar presentaciones del Excel)."""
+
+    first = (name or "").strip().split("\n", 1)[0].strip()
+    return " ".join(first.split())
 
 
 def _row_to_competitor(row: asyncpg.Record) -> Competitor:

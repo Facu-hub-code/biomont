@@ -37,6 +37,17 @@ class CompetitorResolverNode:
                 result["outcome"] = "missing_subject"
                 return updates
 
+            competitor = await self._resolve_competitor_name(query, subject_name)
+            if competitor is not None:
+                updates["competitor_id"] = competitor.id
+                updates["competitor_name"] = competitor.name
+                updates["competitor_is_internal"] = competitor.is_internal
+                if competitor.linked_product_id:
+                    updates["competitor_product_id"] = competitor.linked_product_id
+                result["outcome"] = "resolved"
+                result["payload"] = {"competitor": competitor.name}
+                return updates
+
             second_product = await self._resolve_second_biomont_product(
                 query, UUID(str(subject_id))
             )
@@ -48,30 +59,30 @@ class CompetitorResolverNode:
                 result["payload"] = {"competitor": second_product["name"]}
                 return updates
 
-            competitor = await self._resolve_competitor_name(query, subject_name)
-            if competitor is None:
-                updates["answer_text"] = (
-                    "¿Con que producto queres comparar? Indica el nombre del "
-                    "competidor (ej. Apoquel, Bravecto, Marboxi)."
-                )
-                updates["structured_response"] = True
-                result["outcome"] = "needs_competitor"
-                return updates
-
-            updates["competitor_id"] = competitor.id
-            updates["competitor_name"] = competitor.name
-            updates["competitor_is_internal"] = competitor.is_internal
-            if competitor.linked_product_id:
-                updates["competitor_product_id"] = competitor.linked_product_id
-            result["outcome"] = "resolved"
-            result["payload"] = {"competitor": competitor.name}
+            updates["answer_text"] = (
+                "¿Con que producto queres comparar? Indica el nombre del "
+                "competidor (ej. Apoquel, Bravecto, Marboxi)."
+            )
+            updates["structured_response"] = True
+            result["outcome"] = "needs_competitor"
         return updates
 
     async def _resolve_second_biomont_product(
         self, query: str, exclude_id: UUID
     ) -> dict | None:
+        """Segundo producto Biomont solo si aparece despues del conector vs/versus."""
+
+        if not _COMPARE_RE.search(query):
+            return None
+        parts = _COMPARE_RE.split(query, maxsplit=1)
+        if len(parts) <= 1:
+            return None
+        tail = parts[-1].strip()
+        if not tail:
+            return None
+
         candidates = await self.product_repository.search_candidates(
-            query, allowed_countries=[], limit=5
+            tail, allowed_countries=[], limit=5
         )
         for c in candidates:
             if c.product_id != exclude_id and c.similarity >= 0.55:

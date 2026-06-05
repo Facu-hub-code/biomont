@@ -8,6 +8,7 @@ from biomont_common.comparison.presenter import (
     format_comparison_diff_brief,
     format_comparison_narrative_brief,
     format_focus_no_difference,
+    normalize_summary_output,
 )
 from biomont_common.comparison.redactor_validate import validate_redactor_output
 from biomont_common.schemas.comparison import (
@@ -19,7 +20,6 @@ from biomont_common.schemas.comparison import (
     ComparisonRedactorOutput,
     ComparisonSimilarityItem,
 )
-
 
 def _diff(
     *items: tuple[str, str, str, str],
@@ -193,3 +193,47 @@ def test_narrative_brief_similarities_only() -> None:
     text = format_comparison_narrative_brief(inp)
     assert "comparten" in text.lower()
     assert "No se registran diferencias" in text
+
+
+def test_normalize_summary_converts_bullets_to_paragraphs() -> None:
+    out = ComparisonRedactorOutput(
+        opening="Comparacion entre A y B.",
+        bullets=[
+            ComparisonRedactorBullet(column_key="dosis", text="Dosis distintas."),
+        ],
+        footer="Fuente: comparativa comercial Biomont (v1).",
+    )
+    normalized = normalize_summary_output(out, "summary")
+    assert len(normalized.paragraphs) == 2
+    assert not normalized.bullets
+
+
+def test_narrative_uses_clean_product_labels() -> None:
+    diff = ComparisonDiffResult(
+        subject_product_id=uuid4(),
+        subject_name="Protego 3M",
+        competitor_name="Bravecto",
+        published_version=2,
+        differences=[
+            ComparisonDiffItem(
+                column_key="indicaciones",
+                header_label="INDICACIONES",
+                subject_value="Control pulgas Biomont",
+                competitor_value="Control pulgas competidor",
+                sort_order=1,
+            )
+        ],
+        similarities=[
+            ComparisonSimilarityItem(
+                column_key="dosis",
+                header_label="DOSIS",
+                shared_value="25 mg/kg",
+                sort_order=0,
+            )
+        ],
+    )
+    inp = build_redactor_input(diff, "comparar")
+    text = format_comparison_narrative_brief(inp)
+    assert "112.5 mg" not in text
+    assert "**Protego 3M**" in text
+    assert "**Bravecto**" in text

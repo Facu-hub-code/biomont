@@ -13,6 +13,7 @@ from biomont_common.comparison.presenter import (
     format_comparison_diff_full,
     format_comparison_narrative_brief,
     format_focus_no_difference,
+    normalize_summary_output,
     redactor_user_payload,
     render_redactor_output,
 )
@@ -101,6 +102,9 @@ class ComparisonRedactorNode:
 
             llm_out = await self._invoke_llm(redactor_input, query)
             if llm_out is not None:
+                llm_out = normalize_summary_output(
+                    llm_out, redactor_input.presentation_mode
+                )
                 ok, reason = validate_redactor_output(llm_out, redactor_input)
                 if ok:
                     updates["answer_text"] = render_redactor_output(llm_out)
@@ -144,15 +148,21 @@ class ComparisonRedactorNode:
                 )
                 return None
             if isinstance(response, ComparisonRedactorOutput):
-                ok, _ = validate_redactor_output(response, redactor_input)
+                normalized = normalize_summary_output(
+                    response, redactor_input.presentation_mode
+                )
+                ok, _ = validate_redactor_output(normalized, redactor_input)
                 if ok or attempt == 1:
-                    return response if ok else None
+                    return normalized if ok else None
             elif isinstance(response, dict):
                 try:
                     parsed = ComparisonRedactorOutput.model_validate(response)
-                    ok, _ = validate_redactor_output(parsed, redactor_input)
+                    normalized = normalize_summary_output(
+                        parsed, redactor_input.presentation_mode
+                    )
+                    ok, _ = validate_redactor_output(normalized, redactor_input)
                     if ok or attempt == 1:
-                        return parsed if ok else None
+                        return normalized if ok else None
                 except Exception:
                     pass
         return None
