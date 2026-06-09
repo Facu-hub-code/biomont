@@ -2,6 +2,7 @@
 
 from uuid import uuid4
 
+from biomont_common.comparison.column_priority import default_display_tier
 from biomont_common.comparison.presenter import (
     build_redactor_input,
     detect_presentation_mode,
@@ -32,6 +33,7 @@ def _diff(
             subject_value=subj,
             competitor_value=comp,
             sort_order=i,
+            display_tier=default_display_tier(key, label),
         )
         for i, (key, label, subj, comp) in enumerate(items)
     ]
@@ -41,6 +43,7 @@ def _diff(
             header_label=label,
             shared_value=val,
             sort_order=i,
+            display_tier=default_display_tier(key, label),
         )
         for i, (key, label, val) in enumerate(similarities or [])
     ]

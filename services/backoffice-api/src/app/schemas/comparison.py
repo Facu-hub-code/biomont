@@ -45,3 +45,19 @@ class ImportComparisonOut(BaseModel):
 
 class PublishComparisonOut(BaseModel):
     published_version: int
+
+
+class ComparisonColumnOut(BaseModel):
+    column_key: str
+    header_label: str
+    sort_order: int
+    display_tier: int
+    is_priority: bool
+
+
+class ComparisonColumnListResponse(BaseModel):
+    items: list[ComparisonColumnOut]
+
+
+class ComparisonColumnPriorityUpdate(BaseModel):
+    priority_column_keys: list[str]

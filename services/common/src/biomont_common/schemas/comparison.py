@@ -19,6 +19,7 @@ class ComparisonColumn(BaseModel):
     column_key: str
     header_label: str
     sort_order: int = 0
+    display_tier: int = 3
 
 
 class ComparisonRow(BaseModel):
@@ -36,6 +37,7 @@ class ComparisonDiffItem(BaseModel):
     subject_value: str
     competitor_value: str
     sort_order: int = 0
+    display_tier: int = 3
 
 
 class ComparisonSimilarityItem(BaseModel):
@@ -43,6 +45,7 @@ class ComparisonSimilarityItem(BaseModel):
     header_label: str
     shared_value: str
     sort_order: int = 0
+    display_tier: int = 3
 
 
 class ComparisonDiffResult(BaseModel):

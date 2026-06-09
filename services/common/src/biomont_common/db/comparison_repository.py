@@ -54,7 +54,7 @@ class ComparisonRepository:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT column_key, header_label, sort_order
+                SELECT column_key, header_label, sort_order, display_tier
                 FROM public.commercial_comparison_columns
                 WHERE set_id = $1 AND published_version = $2
                 ORDER BY sort_order, header_label
@@ -67,6 +67,7 @@ class ComparisonRepository:
                 column_key=r["column_key"],
                 header_label=r["header_label"],
                 sort_order=r["sort_order"],
+                display_tier=r["display_tier"],
             )
             for r in rows
         ]
@@ -224,6 +225,7 @@ class ComparisonRepository:
                         header_label=col.header_label,
                         shared_value=subj_val,
                         sort_order=col.sort_order,
+                        display_tier=col.display_tier,
                     )
                 )
                 continue
@@ -234,6 +236,7 @@ class ComparisonRepository:
                     subject_value=subj_val or "(sin dato)",
                     competitor_value=comp_val or "(sin dato)",
                     sort_order=col.sort_order,
+                    display_tier=col.display_tier,
                 )
             )
 

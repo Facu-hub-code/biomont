@@ -18,27 +18,9 @@ from biomont_common.whatsapp_format import normalize_whatsapp_markdown, wa_bold
 SNIPPET_MAX_LEN = 280
 BRIEF_VALUE_MAX_LEN = 200
 HIGHLIGHT_MAX = 5
-NARRATIVE_SUMMARY_MAX_SIM = 3
-NARRATIVE_SUMMARY_MAX_DIFF = 3
+NARRATIVE_SUMMARY_MAX_SIM = 5
+NARRATIVE_SUMMARY_MAX_DIFF = 5
 SUMMARY_BODY_MAX_LEN = 900
-
-# tier 1 = destacada, 4 = detalle largo
-_COLUMN_TIER: dict[str, int] = {
-    "formula": 1,
-    "dosis": 1,
-    "especies_de_destino": 1,
-    "especies": 1,
-    "f_farmaceutica": 1,
-    "via_de_adm": 1,
-    "indicaciones": 2,
-    "producto": 3,
-    "laboratorio_fabricante": 3,
-    "pais": 3,
-    "empresa_importadora": 3,
-    "precauciones": 4,
-    "contraindicaciones": 4,
-    "reacciones_adversas": 4,
-}
 
 _FOCUS_SYNONYMS: tuple[tuple[str, str], ...] = (
     ("dosificacion", "dosis"),
@@ -67,6 +49,8 @@ _FOCUS_SYNONYMS: tuple[tuple[str, str], ...] = (
     ("pais", "pais"),
     ("país", "pais"),
     ("producto", "producto"),
+    ("tiempo de efecto", "tiempo_de_efecto_meses"),
+    ("duracion", "tiempo_de_efecto_meses"),
 )
 
 _FULL_MARKERS: tuple[str, ...] = (
@@ -82,10 +66,6 @@ _FULL_MARKERS: tuple[str, ...] = (
 )
 
 PresentationMode = Literal["summary", "focus", "full"]
-
-
-def tier_for_column_key(column_key: str) -> int:
-    return _COLUMN_TIER.get(column_key, 3)
 
 
 def _normalize_query(query: str) -> str:
@@ -121,7 +101,7 @@ def _to_redactor_item(item: ComparisonDiffItem) -> ComparisonRedactorItem:
     return ComparisonRedactorItem(
         column_key=item.column_key,
         header_label=item.header_label,
-        tier=tier_for_column_key(item.column_key),
+        tier=item.display_tier,
         subject_snippet=subj,
         competitor_snippet=comp,
         truncated=subj_trunc or comp_trunc,
@@ -133,7 +113,7 @@ def _to_similarity_redactor_item(item: ComparisonSimilarityItem) -> ComparisonRe
     return ComparisonRedactorItem(
         column_key=item.column_key,
         header_label=item.header_label,
-        tier=tier_for_column_key(item.column_key),
+        tier=item.display_tier,
         subject_snippet=shared,
         competitor_snippet=shared,
         truncated=truncated,
@@ -145,7 +125,7 @@ def _sort_similarities(
 ) -> list[ComparisonRedactorItem]:
     ordered = sorted(
         similarities,
-        key=lambda s: (tier_for_column_key(s.column_key), s.sort_order),
+        key=lambda s: (s.display_tier, s.sort_order),
     )
     return [_to_similarity_redactor_item(s) for s in ordered]
 
@@ -153,7 +133,7 @@ def _sort_similarities(
 def _sort_differences(diff: ComparisonDiffResult) -> list[ComparisonRedactorItem]:
     items_sorted = sorted(
         diff.differences,
-        key=lambda d: (tier_for_column_key(d.column_key), d.sort_order),
+        key=lambda d: (d.display_tier, d.sort_order),
     )
     return [_to_redactor_item(d) for d in items_sorted]
 

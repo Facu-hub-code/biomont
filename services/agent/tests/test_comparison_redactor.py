@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 
+from biomont_common.comparison.column_priority import default_display_tier
 from biomont_common.schemas.agent_graph import Intent
 from biomont_common.schemas.comparison import (
     ComparisonDiffItem,
@@ -107,6 +108,7 @@ class _ComparisonRepoWithDiff:
                     subject_value="1 tableta cada 10 kg",
                     competitor_value="2.75 a 5.5 mg/kg",
                     sort_order=9,
+                    display_tier=default_display_tier("dosis", "DOSIS"),
                 ),
                 ComparisonDiffItem(
                     column_key="formula",
@@ -114,6 +116,7 @@ class _ComparisonRepoWithDiff:
                     subject_value="20 mg marbofloxacina",
                     competitor_value="25 mg marbofloxacina",
                     sort_order=4,
+                    display_tier=default_display_tier("formula", "FÓRMULA"),
                 ),
             ],
             similarities=[
@@ -122,6 +125,7 @@ class _ComparisonRepoWithDiff:
                     header_label="VÍA DE ADM",
                     shared_value="Oral",
                     sort_order=2,
+                    display_tier=default_display_tier("via_de_adm", "VÍA DE ADM"),
                 ),
             ],
         )

@@ -289,3 +289,26 @@ export async function publishComparisonAction(
     return { ok: false, message: formatApiError(e) };
   }
 }
+
+export async function saveComparisonColumnsAction(
+  _prev: ActionFeedbackState | null,
+  formData: FormData,
+): Promise<ActionFeedbackState> {
+  try {
+    await requireRole(["admin", "scientist"]);
+    const productId = String(formData.get("product_id") ?? "");
+    if (!productId) return { ok: false, message: "Falta producto." };
+    const priorityKeys = formData
+      .getAll("priority_column_keys")
+      .map((v) => String(v))
+      .filter(Boolean);
+    await apiRequest(`/products/${productId}/comparison/columns`, {
+      method: "PUT",
+      json: { priority_column_keys: priorityKeys },
+    });
+    revalidatePath(`/products/${productId}`);
+    return { ok: true, message: "Prioridades guardadas." };
+  } catch (e) {
+    return { ok: false, message: formatApiError(e) };
+  }
+}

@@ -18,6 +18,9 @@ from app.db.comparison_admin_repository import ComparisonAdminRepository
 from app.db.product_admin_repository import ProductAdminRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.comparison import (
+    ComparisonColumnListResponse,
+    ComparisonColumnOut,
+    ComparisonColumnPriorityUpdate,
     ComparisonSetOut,
     CompetitorCreate,
     CompetitorListResponse,
@@ -97,6 +100,67 @@ async def get_product_comparison(
     if row is None:
         return None
     return ComparisonSetOut(**asdict(row))
+
+
+@router.get(
+    "/products/{product_id}/comparison/columns",
+    response_model=ComparisonColumnListResponse,
+)
+async def list_product_comparison_columns(
+    product_id: UUID,
+    comparison: ComparisonAdminRepository = Depends(get_comparison),
+    products: ProductAdminRepository = Depends(get_products),
+    _: CurrentUser = Depends(require_roles("admin", "scientist", "viewer")),
+) -> ComparisonColumnListResponse:
+    if await products.get_product(product_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    set_row = await comparison.get_set_by_product(product_id)
+    if set_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    rows = await comparison.list_columns(set_row.id)
+    return ComparisonColumnListResponse(
+        items=[ComparisonColumnOut(**asdict(r)) for r in rows]
+    )
+
+
+@router.put(
+    "/products/{product_id}/comparison/columns",
+    response_model=ComparisonColumnListResponse,
+)
+async def update_product_comparison_columns(
+    product_id: UUID,
+    payload: ComparisonColumnPriorityUpdate,
+    comparison: ComparisonAdminRepository = Depends(get_comparison),
+    products: ProductAdminRepository = Depends(get_products),
+    audit: AuditRepository = Depends(get_audit),
+    current: CurrentUser = Depends(require_roles("admin", "scientist")),
+) -> ComparisonColumnListResponse:
+    if await products.get_product(product_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    set_row = await comparison.get_set_by_product(product_id)
+    if set_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    try:
+        await comparison.update_column_priorities(
+            set_row.id,
+            priority_keys=payload.priority_column_keys,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    rows = await comparison.list_columns(set_row.id)
+    await audit.record(
+        actor_id=current.id,
+        entity="commercial_comparison_columns",
+        entity_id=set_row.id,
+        action="update_priorities",
+        after={"priority_column_keys": payload.priority_column_keys},
+    )
+    return ComparisonColumnListResponse(
+        items=[ComparisonColumnOut(**asdict(r)) for r in rows]
+    )
 
 
 @router.post(

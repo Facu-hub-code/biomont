@@ -11,6 +11,7 @@ from uuid import UUID
 
 import asyncpg
 
+from biomont_common.comparison.column_priority import default_display_tier
 from biomont_common.db.pool import DatabasePool
 
 
@@ -37,6 +38,15 @@ class CompetitorRow:
     brand: str | None
     is_internal: bool
     linked_product_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class ComparisonColumnRow:
+    column_key: str
+    header_label: str
+    sort_order: int
+    display_tier: int
+    is_priority: bool
 
 
 class ComparisonAdminRepository:
@@ -116,6 +126,63 @@ class ComparisonAdminRepository:
             source_document_id=row["source_document_id"],
         )
 
+    async def list_columns(self, set_id: UUID) -> list[ComparisonColumnRow]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT ON (column_key)
+                    column_key, header_label, sort_order, display_tier
+                FROM public.commercial_comparison_columns
+                WHERE set_id = $1
+                ORDER BY column_key, published_version ASC
+                """,
+                set_id,
+            )
+        return [
+            ComparisonColumnRow(
+                column_key=r["column_key"],
+                header_label=r["header_label"],
+                sort_order=r["sort_order"],
+                display_tier=r["display_tier"],
+                is_priority=r["display_tier"] <= 1,
+            )
+            for r in sorted(rows, key=lambda x: (x["sort_order"], x["header_label"]))
+        ]
+
+    async def update_column_priorities(
+        self,
+        set_id: UUID,
+        *,
+        priority_keys: list[str],
+    ) -> None:
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                all_rows = await conn.fetch(
+                    """
+                    SELECT column_key FROM public.commercial_comparison_columns
+                    WHERE set_id = $1
+                    """,
+                    set_id,
+                )
+                known = {r["column_key"] for r in all_rows}
+                unknown = set(priority_keys) - known
+                if unknown:
+                    raise ValueError(f"unknown_columns:{','.join(sorted(unknown)[:3])}")
+
+                priority_set = set(priority_keys)
+                for column_key in known:
+                    tier = 1 if column_key in priority_set else 3
+                    await conn.execute(
+                        """
+                        UPDATE public.commercial_comparison_columns
+                        SET display_tier = $3
+                        WHERE set_id = $1 AND column_key = $2
+                        """,
+                        set_id,
+                        column_key,
+                        tier,
+                    )
+
     async def clear_draft(self, set_id: UUID) -> None:
         async with self._pool.acquire() as conn:
             async with conn.transaction():
@@ -164,19 +231,24 @@ class ComparisonAdminRepository:
                 await self.clear_draft(set_id)
 
                 for idx, header in enumerate(headers):
+                    col_key = column_keys[idx]
+                    tier = default_display_tier(col_key, header)
                     await conn.execute(
                         """
                         INSERT INTO public.commercial_comparison_columns (
-                            set_id, column_key, header_label, sort_order, published_version
-                        ) VALUES ($1, $2, $3, $4, 0)
+                            set_id, column_key, header_label, sort_order,
+                            published_version, display_tier
+                        ) VALUES ($1, $2, $3, $4, 0, $5)
                         ON CONFLICT (set_id, column_key, published_version) DO UPDATE
                             SET header_label = EXCLUDED.header_label,
-                                sort_order = EXCLUDED.sort_order
+                                sort_order = EXCLUDED.sort_order,
+                                display_tier = EXCLUDED.display_tier
                         """,
                         set_id,
-                        column_keys[idx],
+                        col_key,
                         header,
                         idx,
+                        tier,
                     )
 
                 product_col_idx = next(
@@ -301,9 +373,10 @@ class ComparisonAdminRepository:
                 await conn.execute(
                     """
                     INSERT INTO public.commercial_comparison_columns (
-                        set_id, column_key, header_label, sort_order, published_version
+                        set_id, column_key, header_label, sort_order,
+                        published_version, display_tier
                     )
-                    SELECT set_id, column_key, header_label, sort_order, $2
+                    SELECT set_id, column_key, header_label, sort_order, $2, display_tier
                     FROM public.commercial_comparison_columns
                     WHERE set_id = $1 AND published_version = 0
                     """,

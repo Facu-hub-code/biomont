@@ -6,6 +6,10 @@ import { apiRequest } from "@/lib/api";
 import { requireRole } from "@/lib/auth";
 
 import { CatalogBackLink } from "@/components/catalog-back-link";
+import {
+  ComparisonColumnsForm,
+  type ComparisonColumnRow,
+} from "@/components/comparison-columns-form";
 import Link from "next/link";
 
 import {
@@ -16,6 +20,7 @@ import {
   linkDocumentAction,
   publishComparisonAction,
   publishDosingAction,
+  saveComparisonColumnsAction,
   unlinkDocumentAction,
   updateAliasAction,
   updateProductAction,
@@ -91,6 +96,10 @@ type ComparisonSet = {
   published_version: number;
 } | null;
 
+type ComparisonColumnsResponse = {
+  items: ComparisonColumnRow[];
+};
+
 type DocumentSummary = {
   id: string;
   title: string;
@@ -112,16 +121,20 @@ export default async function ProductDetailPage({
     notFound();
   }
   const emptyDosing: DosingBundle = { profiles: [], draft_rules: [], open_gaps_count: 0 };
-  const [aliases, linkedDocs, dosingResult, comparisonResult, documentsResult] =
+  const [aliases, linkedDocs, dosingResult, comparisonResult, comparisonColumnsResult, documentsResult] =
     await Promise.all([
       apiRequest<AliasListResponse>(`/products/${id}/aliases?page=1&page_size=100`),
       apiRequest<LinkedDocumentsResponse>(`/products/${id}/documents?page=1&page_size=100`),
       apiRequest<DosingBundle>(`/products/${id}/dosing`).catch(() => emptyDosing),
       apiRequest<ComparisonSet>(`/products/${id}/comparison`).catch(() => null),
+      apiRequest<ComparisonColumnsResponse>(`/products/${id}/comparison/columns`).catch(
+        () => ({ items: [] as ComparisonColumnRow[] }),
+      ),
       apiRequest<DocumentSummary[]>("/documents").catch(() => [] as DocumentSummary[]),
     ]);
   const dosing = dosingResult;
   const comparison = comparisonResult;
+  const comparisonColumns = comparisonColumnsResult.items;
   const allDocuments = Array.isArray(documentsResult) ? documentsResult : [];
 
   return (
@@ -513,6 +526,13 @@ export default async function ProductDetailPage({
                 <input type="hidden" name="product_id" value={product.id} />
                 <SubmitButton label="Publicar comparativa" pendingLabel="Publicando…" variant="secondary" />
               </ActionFeedbackForm>
+            ) : null}
+            {comparisonColumns.length > 0 ? (
+              <ComparisonColumnsForm
+                productId={product.id}
+                columns={comparisonColumns}
+                saveAction={saveComparisonColumnsAction}
+              />
             ) : null}
           </>
         ) : null}
