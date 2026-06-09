@@ -31,6 +31,7 @@ este directorio.
 | 013 | [Comparador comercial: redaccion con LLM (diff determinista)](./013-comparison-llm-redactor.md) | en curso |
 | 014 | [Comparador comercial: resumen narrativo (similitudes + diferencias)](./014-comparison-narrative-summary.md) | implementada |
 | 016 | [Comparador comercial: prioridad de columnas desde backoffice](./016-comparison-column-priority.md) | implementada |
+| 017 | [Webhook WhatsApp: idempotencia (wamid) y ack rapido](./017-whatsapp-webhook-idempotency.md) | implementada |
 
 ## Reglas de calidad
 

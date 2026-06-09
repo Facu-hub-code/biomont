@@ -23,6 +23,7 @@ from biomont_common.db.product_repository import ProductRepository
 from biomont_common.db.rag_repository import RagRepository
 from biomont_common.db.rtc_repository import RtcRepository
 from biomont_common.db.system_prompt_repository import SystemPromptRepository
+from biomont_common.db.whatsapp_inbound_repository import WhatsappInboundRepository
 from biomont_common.integrations.openai_factory import (
     build_chat_model,
     build_embeddings,
@@ -115,6 +116,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         rag_vector_weight=rag_settings.vector_weight,
     )
     app.state.orchestrator = orchestrator
+    app.state.inbound_repository = WhatsappInboundRepository(pool)
     logger.info("startup_complete", action="startup")
     try:
         yield
