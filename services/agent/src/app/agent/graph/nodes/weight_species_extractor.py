@@ -19,7 +19,7 @@ class WeightSpeciesExtractorNode:
             ctx = extract_dosing_context(query)
             if ctx.rejected_lb:
                 updates["answer_text"] = (
-                    "Para calcular la dosis necesito el **peso en kg** "
+                    "Para calcular la dosis necesito el *peso en kg* "
                     "(ej. 25 kg). En esta version no convierto libras automaticamente."
                 )
                 updates["structured_response"] = True
@@ -30,7 +30,7 @@ class WeightSpeciesExtractorNode:
                 product = state.get("product_name") or "el producto"
                 updates["answer_text"] = (
                     f"Para indicarte la dosis correcta de *{product}*, necesito el "
-                    f"**peso del animal en kg** (ej. 25 kg)."
+                    f"*peso del animal en kg* (ej. 25 kg)."
                 )
                 updates["structured_response"] = True
                 result["outcome"] = "needs_weight"
@@ -40,7 +40,7 @@ class WeightSpeciesExtractorNode:
                 product = state.get("product_name") or "el producto"
                 updates["answer_text"] = (
                     f"Para calcular la dosis de *{product}*, necesito saber la "
-                    f"**especie** (ej. perro, gato, vaca, ternero)."
+                    f"*especie* (ej. perro, gato, vaca, ternero)."
                 )
                 updates["structured_response"] = True
                 result["outcome"] = "needs_species"

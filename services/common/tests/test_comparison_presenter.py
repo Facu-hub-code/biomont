@@ -180,8 +180,11 @@ def test_narrative_brief_covers_similarities_and_differences() -> None:
     )
     inp = build_redactor_input(diff, "comparar")
     text = format_comparison_narrative_brief(inp)
-    assert "comparten" in text.lower()
-    assert "distinguen" in text.lower()
+    assert "Comparación entre" in text
+    assert "compartido" in text.lower()
+    assert "FÓRMULA" in text
+    assert "MARVO 20" in text
+    assert "MARBOXI" in text
     assert "diferencias más" in text.lower() or "más detalle" in text.lower()
 
 
@@ -191,7 +194,7 @@ def test_narrative_brief_similarities_only() -> None:
     )
     inp = build_redactor_input(diff, "comparar")
     text = format_comparison_narrative_brief(inp)
-    assert "comparten" in text.lower()
+    assert "compartido" in text.lower()
     assert "No se registran diferencias" in text
 
 
@@ -235,5 +238,5 @@ def test_narrative_uses_clean_product_labels() -> None:
     inp = build_redactor_input(diff, "comparar")
     text = format_comparison_narrative_brief(inp)
     assert "112.5 mg" not in text
-    assert "**Protego 3M**" in text
-    assert "**Bravecto**" in text
+    assert "*Protego 3M*" in text
+    assert "*Bravecto*" in text

@@ -199,4 +199,4 @@ async def test_graph_comparison_flag_off_uses_deterministic_brief():
     trace = next(t for t in output.graph_trace if t.node == "ComparisonRedactor")
     assert trace.outcome in ("deterministic_flag_off", "fallback_deterministic")
     assert "MARVO 20" in (output.answer_text or "")
-    assert "comparten" in (output.answer_text or "").lower()
+    assert "compartido" in (output.answer_text or "").lower()

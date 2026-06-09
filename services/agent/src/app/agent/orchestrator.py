@@ -18,6 +18,7 @@ from biomont_common.db.conversation_state_repository import (
 from biomont_common.db.rtc_repository import RtcRepository, RtcUser
 from biomont_common.db.system_prompt_repository import SystemPromptRepository
 from biomont_common.logging import get_logger
+from biomont_common.whatsapp_format import normalize_whatsapp_markdown
 from biomont_common.schemas.rag import Citation, RagAnswer, RetrievedChunk
 
 from app.agent.graph.graph import GraphOutput, GraphPipeline
@@ -384,7 +385,10 @@ class AgentOrchestrator:
 
     async def _send(self, to: str, body: str) -> None:
         try:
-            await self._whatsapp.send_text(to_phone_e164=to, body=body)
+            await self._whatsapp.send_text(
+                to_phone_e164=to,
+                body=normalize_whatsapp_markdown(body),
+            )
         except Exception:
             _logger.exception(
                 "agent_whatsapp_send_failed", action="send_failed"

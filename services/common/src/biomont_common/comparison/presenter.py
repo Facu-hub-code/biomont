@@ -13,10 +13,10 @@ from biomont_common.schemas.comparison import (
     ComparisonRedactorOutput,
     ComparisonSimilarityItem,
 )
+from biomont_common.whatsapp_format import normalize_whatsapp_markdown, wa_bold
 
 SNIPPET_MAX_LEN = 280
 BRIEF_VALUE_MAX_LEN = 200
-NARRATIVE_VALUE_MAX_LEN = 90
 HIGHLIGHT_MAX = 5
 NARRATIVE_SUMMARY_MAX_SIM = 3
 NARRATIVE_SUMMARY_MAX_DIFF = 3
@@ -113,13 +113,6 @@ def _snippet(value: str, *, max_len: int = SNIPPET_MAX_LEN) -> tuple[str, bool]:
     if len(text) <= max_len:
         return text, False
     return text[: max_len - 1].rstrip() + "…", True
-
-
-def _truncate(value: str, max_len: int) -> str:
-    text = (value or "").strip()
-    if len(text) <= max_len:
-        return text
-    return text[: max_len - 1].rstrip() + "…"
 
 
 def _to_redactor_item(item: ComparisonDiffItem) -> ComparisonRedactorItem:
@@ -234,44 +227,38 @@ def format_focus_no_difference(
 ) -> str:
     label = header_label or focus_column_label(column_key)
     return (
-        f"En el cuadro comparativo entre **{subject_name}** y **{competitor_name}**, "
-        f"el campo **{label}** coincide o no tiene datos diferenciados."
+        f"En el cuadro comparativo entre {wa_bold(subject_name)} y "
+        f"{wa_bold(competitor_name)}, el campo {wa_bold(label)} coincide o no "
+        f"tiene datos diferenciados."
     )
 
 
-def _join_similarity_phrase(
-    redactor_input: ComparisonRedactorInput,
+def _comparison_header(subject_name: str, competitor_name: str) -> str:
+    return f"Comparación entre {wa_bold(subject_name)} y {wa_bold(competitor_name)}"
+
+
+def _append_shared_field(lines: list[str], *, label: str, value: str) -> None:
+    lines.extend([f"{wa_bold(label)} (compartido):", value, ""])
+
+
+def _append_diff_field(
+    lines: list[str],
     *,
-    value_max_len: int = NARRATIVE_VALUE_MAX_LEN,
-) -> str | None:
-    sims = redactor_input.similarity_items
-    if not sims:
-        return None
-    parts: list[str] = []
-    for item in sims:
-        val = _truncate(item.subject_snippet, value_max_len)
-        parts.append(f"**{item.header_label.lower()}** ({val})")
-    joined = "; ".join(parts)
-    return (
-        f"**{redactor_input.subject_name}** y **{redactor_input.competitor_name}** "
-        f"comparten {joined} según el cuadro comercial."
+    label: str,
+    subject_name: str,
+    competitor_name: str,
+    subject_value: str,
+    competitor_value: str,
+) -> None:
+    lines.extend(
+        [
+            f"{wa_bold(label)} {wa_bold(subject_name)}:",
+            subject_value,
+            f"{wa_bold(label)} {wa_bold(competitor_name)}:",
+            competitor_value,
+            "",
+        ]
     )
-
-
-def _join_difference_phrase(
-    redactor_input: ComparisonRedactorInput,
-    *,
-    value_max_len: int = NARRATIVE_VALUE_MAX_LEN,
-) -> str | None:
-    diffs = redactor_input.items or redactor_input.highlight_items
-    if not diffs:
-        return None
-    parts: list[str] = []
-    for item in diffs:
-        subj = _truncate(item.subject_snippet, value_max_len)
-        comp = _truncate(item.competitor_snippet, value_max_len)
-        parts.append(f"**{item.header_label.lower()}** ({subj} vs {comp})")
-    return f"Se distinguen principalmente en {'; '.join(parts)}."
 
 
 def format_comparison_narrative_brief(
@@ -279,30 +266,46 @@ def format_comparison_narrative_brief(
 ) -> str:
     """Fallback narrativo para modo summary (spec 014)."""
 
-    paragraphs: list[str] = []
-    sim_p = _join_similarity_phrase(redactor_input)
-    diff_p = _join_difference_phrase(redactor_input)
-    if sim_p:
-        paragraphs.append(sim_p)
-    if diff_p:
-        paragraphs.append(diff_p)
-    if not paragraphs:
-        paragraphs.append(
+    subject_name = redactor_input.subject_name
+    competitor_name = redactor_input.competitor_name
+    sims = redactor_input.similarity_items
+    diffs = redactor_input.items or redactor_input.highlight_items
+
+    lines = [_comparison_header(subject_name, competitor_name), ""]
+
+    if not sims and not diffs:
+        lines.append(
             "No se encontraron campos comparables con datos en el cuadro comercial."
         )
-    elif not diff_p and sim_p:
-        paragraphs.append(
-            "No se registran diferencias en los ejes clínicos principales del cuadro."
-        )
-
-    lines = list(paragraphs)
-    if redactor_input.other_items_count > 0:
         lines.append("")
+    else:
+        for item in sims:
+            _append_shared_field(
+                lines,
+                label=item.header_label,
+                value=item.subject_snippet,
+            )
+        for item in diffs:
+            _append_diff_field(
+                lines,
+                label=item.header_label,
+                subject_name=subject_name,
+                competitor_name=competitor_name,
+                subject_value=item.subject_snippet,
+                competitor_value=item.competitor_snippet,
+            )
+        if sims and not diffs:
+            lines.append(
+                "No se registran diferencias en los ejes clínicos principales del cuadro."
+            )
+            lines.append("")
+
+    if redactor_input.other_items_count > 0:
         lines.append(
             "Hay más detalle en el cuadro (precauciones, indicaciones, etc.). "
             "Preguntá por un tema concreto: dosis, fórmula, precauciones…"
         )
-    lines.append("")
+        lines.append("")
     lines.append(
         f"Fuente: comparativa comercial Biomont (v{redactor_input.published_version})."
     )
@@ -317,9 +320,10 @@ def format_comparison_diff_brief(
     """Fallback determinista por columna (modo focus)."""
 
     lines = [
-        f"Comparando **{redactor_input.subject_name}** con "
-        f"**{redactor_input.competitor_name}** "
-        f"(datos validados v{redactor_input.published_version}):",
+        _comparison_header(
+            redactor_input.subject_name, redactor_input.competitor_name
+        ),
+        f"(datos validados v{redactor_input.published_version})",
         "",
     ]
     items = redactor_input.items or redactor_input.highlight_items
@@ -327,6 +331,7 @@ def format_comparison_diff_brief(
         lines.append(
             "No se encontraron diferencias en los campos comparables del cuadro comercial."
         )
+        lines.append("")
     else:
         for item in items:
             subj = item.subject_snippet
@@ -335,9 +340,14 @@ def format_comparison_diff_brief(
                 subj = subj[: value_max_len - 1] + "…"
             if len(comp) > value_max_len:
                 comp = comp[: value_max_len - 1] + "…"
-            lines.append(f"- **{item.header_label}**:")
-            lines.append(f"  - {redactor_input.subject_name}: {subj}")
-            lines.append(f"  - {redactor_input.competitor_name}: {comp}")
+            _append_diff_field(
+                lines,
+                label=item.header_label,
+                subject_name=redactor_input.subject_name,
+                competitor_name=redactor_input.competitor_name,
+                subject_value=subj,
+                competitor_value=comp,
+            )
     if redactor_input.other_items_count > 0:
         lines.append("")
         lines.append(
@@ -393,7 +403,7 @@ def render_redactor_output(output: ComparisonRedactorOutput) -> str:
             lines.append(hint.strip())
         lines.append("")
         lines.append(output.footer.strip())
-        return "\n".join(lines)
+        return normalize_whatsapp_markdown("\n".join(lines))
 
     lines = [output.opening.strip(), ""]
     for bullet in output.bullets:
@@ -404,7 +414,7 @@ def render_redactor_output(output: ComparisonRedactorOutput) -> str:
         lines.append(hint.strip())
     lines.append("")
     lines.append(output.footer.strip())
-    return "\n".join(lines)
+    return normalize_whatsapp_markdown("\n".join(lines))
 
 
 def redactor_user_payload(redactor_input: ComparisonRedactorInput, query: str) -> str:

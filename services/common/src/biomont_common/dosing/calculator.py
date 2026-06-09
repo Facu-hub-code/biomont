@@ -13,6 +13,7 @@ from biomont_common.schemas.dosing import (
     DosingRule,
     DosingRuleType,
 )
+from biomont_common.whatsapp_format import wa_bold
 
 
 def _quantize(value: Decimal) -> Decimal:
@@ -277,8 +278,8 @@ def _format_weight_band_response(result: DoseCalculationResult) -> str:
         strength = _format_decimal_es(result.output_value)
         presentation = result.rule_label or f"presentación de {strength} mg"
         main = (
-            f"Para {subject} de {weight} kg, corresponde *{product}* "
-            f"en **{presentation}**"
+            f"Para {subject} de {weight} kg, corresponde {wa_bold(product)} "
+            f"en {wa_bold(presentation)}"
         )
         if range_hint:
             main += f" ({range_hint})"
@@ -286,7 +287,7 @@ def _format_weight_band_response(result: DoseCalculationResult) -> str:
 
     if result.output_unit == DosingOutputUnit.tablets:
         dose = _format_tablets_human(result.output_value)
-        main = f"Para {subject} de {weight} kg, la dosis de *{product}* es **{dose}**"
+        main = f"Para {subject} de {weight} kg, la dosis de {wa_bold(product)} es {wa_bold(dose)}"
         if range_hint:
             main += f" ({range_hint})"
         return f"{main}.\n\nSegún documentación validada Biomont."
@@ -294,8 +295,8 @@ def _format_weight_band_response(result: DoseCalculationResult) -> str:
     amount = _format_decimal_es(result.output_value)
     unit = result.output_unit.value
     main = (
-        f"Para {subject} de {weight} kg, la dosis de *{product}* "
-        f"es **{amount} {unit}**"
+        f"Para {subject} de {weight} kg, la dosis de {wa_bold(product)} "
+        f"es {wa_bold(f'{amount} {unit}')}"
     )
     if range_hint:
         main += f" ({range_hint})"
@@ -310,7 +311,7 @@ def _format_formula_response(result: DoseCalculationResult) -> str:
 
     if result.output_unit == DosingOutputUnit.tablets:
         dose = _format_tablets_human(result.output_value)
-        main = f"Para {subject} de {weight} kg, la dosis de *{product}* es **{dose}**"
+        main = f"Para {subject} de {weight} kg, la dosis de {wa_bold(product)} es {wa_bold(dose)}"
         if rate:
             main += f" ({rate})"
         return f"{main}.\n\nSegún documentación validada Biomont."
@@ -318,8 +319,8 @@ def _format_formula_response(result: DoseCalculationResult) -> str:
     if result.output_unit == DosingOutputUnit.ml:
         amount = _format_decimal_es(result.output_value)
         main = (
-            f"Para {subject} de {weight} kg, administrar **{amount} ml** "
-            f"de *{product}*"
+            f"Para {subject} de {weight} kg, administrar {wa_bold(f'{amount} ml')} "
+            f"de {wa_bold(product)}"
         )
         if rate:
             main += f" ({rate})"
@@ -327,8 +328,8 @@ def _format_formula_response(result: DoseCalculationResult) -> str:
 
     amount = _format_decimal_es(result.output_value)
     main = (
-        f"Para {subject} de {weight} kg, la dosis de *{product}* "
-        f"es **{amount} mg**"
+        f"Para {subject} de {weight} kg, la dosis de {wa_bold(product)} "
+        f"es {wa_bold(f'{amount} mg')}"
     )
     if rate:
         main += f" ({rate})"

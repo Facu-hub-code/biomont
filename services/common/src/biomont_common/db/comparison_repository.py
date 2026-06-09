@@ -269,20 +269,30 @@ def _row_to_competitor(row: asyncpg.Record) -> Competitor:
 def format_comparison_diff(result: ComparisonDiffResult) -> str:
     """Plantilla neutra sin juicio de valor."""
 
+    from biomont_common.comparison.presenter import (
+        _append_diff_field,
+        _comparison_header,
+    )
+
     lines = [
-        f"Comparando **{result.subject_name}** con **{result.competitor_name}** "
-        f"(datos validados v{result.published_version}):",
+        _comparison_header(result.subject_name, result.competitor_name),
+        f"(datos validados v{result.published_version})",
         "",
     ]
     if not result.differences:
         lines.append(
             "No se encontraron diferencias en los campos comparables del cuadro comercial."
         )
+        lines.append("")
     else:
         for item in result.differences:
-            lines.append(f"- **{item.header_label}**:")
-            lines.append(f"  - {result.subject_name}: {item.subject_value}")
-            lines.append(f"  - {result.competitor_name}: {item.competitor_value}")
-    lines.append("")
+            _append_diff_field(
+                lines,
+                label=item.header_label,
+                subject_name=result.subject_name,
+                competitor_name=result.competitor_name,
+                subject_value=item.subject_value,
+                competitor_value=item.competitor_value,
+            )
     lines.append("Fuente: comparativa comercial Biomont.")
     return "\n".join(lines)
